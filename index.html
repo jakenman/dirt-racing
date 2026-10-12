@@ -2086,11 +2086,10 @@
 				const curv = Math.max(curvAt(s), curvAt(s + 10));
 				const inTurn = curv > 0.005;
 				// Target speed by line quality + skill (best line = fastest)
-				// Aggressive pace — top AI clearly faster than a casual player lap
-				const linePace = q === 0 ? 1.22 : q === 1 ? 1.18 : q === 2 ? 1.14 : (1.08 - Math.min(0.1, (q - 3) * 0.015));
-				const cornerFactor = inTurn ? (cls === 'truck' ? 0.98 : 1.02) : 1.12;
-				let tgt = S.maxv * linePace * cornerFactor;
-				// Traffic: lift if someone is immediately ahead on similar line
+				// Explicit mph targets (HUD uses vel * 2.237). Player hits ~70-80; top AI 88-96.
+				const targetMph = q === 0 ? 96 : q === 1 ? 92 : q === 2 ? 88 : (80 - Math.min(14, (q - 3) * 2.5));
+				let tgt = targetMph / 2.237; // convert mph → game units
+				if (inTurn) tgt *= cls === 'truck' ? 0.94 : 0.97;
 				let brake = 0;
 				for (const o of cars) {
 					if (o === c || o.done) continue;
@@ -2100,16 +2099,16 @@
 						fz = Math.cos(c.h);
 					const ahead = dx * fx + dz * fz,
 						side = dx * fz - dz * fx;
-					if (ahead > 0.3 && ahead < 5 && Math.abs(side) < 2.0) {
-						brake = Math.max(brake, 0.3 * (1 - ahead / 5));
-						tgt *= 0.85 + 0.15 * (ahead / 5);
+					if (ahead > 0.3 && ahead < 4.5 && Math.abs(side) < 1.8) {
+						brake = Math.max(brake, 0.25 * (1 - ahead / 4.5));
+						tgt *= 0.9 + 0.1 * (ahead / 4.5);
 					}
 				}
-				// Smooth speed
-				if (c.aiSp == null) c.aiSp = tgt * 0.85;
-				const wantSp = tgt * (1 - brake * 0.45);
-				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 6.0);
-				if (c.aiSp < tgt * 0.75) c.aiSp = tgt * 0.75;
+				// Reach race speed in ~1 second from green
+				if (c.aiSp == null) c.aiSp = tgt * 0.5;
+				const wantSp = tgt * (1 - brake * 0.4);
+				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 8.0);
+				if (c.aiSp < wantSp * 0.88) c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 4);
 				const sp = c.aiSp;
 				// Advance along track
 				s = s + sp * dt;
