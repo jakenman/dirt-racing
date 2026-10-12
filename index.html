@@ -2077,19 +2077,16 @@
 			}
 
 			function aiDrive(c, dt) {
-				// Arcade spline AI: ride a fixed racing line on the track centerline path.
-				// Used by many oval/arcade racers so AI never wall-surfs or bobs on the bank.
+				// Kinematic path AI: sit ON the line at real race speed (no laggy blend)
 				const q = c.lineQ != null ? c.lineQ : 5;
 				const p = proj(c.x, c.z);
-				// Keep s in sync from projection (stable after collisions)
-				let s = p.s;
-				const curv = Math.max(curvAt(s), curvAt(s + 10));
+				if (c.aiS == null || !isFinite(c.aiS)) c.aiS = p.s;
+				const curv = Math.max(curvAt(c.aiS), curvAt(c.aiS + 10));
 				const inTurn = curv > 0.005;
-				// Target speed by line quality + skill (best line = fastest)
-				// Explicit mph targets (HUD uses vel * 2.237). Player hits ~70-80; top AI 88-96.
-				const targetMph = q === 0 ? 96 : q === 1 ? 92 : q === 2 ? 88 : (80 - Math.min(14, (q - 3) * 2.5));
-				let tgt = targetMph / 2.237; // convert mph → game units
-				if (inTurn) tgt *= cls === 'truck' ? 0.94 : 0.97;
+				// Player hits ~70-80 mph; leaders 90-100 so they actually compete
+				const targetMph = q === 0 ? 100 : q === 1 ? 96 : q === 2 ? 92 : (84 - Math.min(12, (q - 3) * 2));
+				let tgt = targetMph / 2.237;
+				if (inTurn) tgt *= cls === 'truck' ? 0.95 : 0.98;
 				let brake = 0;
 				for (const o of cars) {
 					if (o === c || o.done) continue;
@@ -2099,41 +2096,36 @@
 						fz = Math.cos(c.h);
 					const ahead = dx * fx + dz * fz,
 						side = dx * fz - dz * fx;
-					if (ahead > 0.3 && ahead < 4.5 && Math.abs(side) < 1.8) {
-						brake = Math.max(brake, 0.25 * (1 - ahead / 4.5));
-						tgt *= 0.9 + 0.1 * (ahead / 4.5);
+					if (ahead > 0.3 && ahead < 4 && Math.abs(side) < 1.8) {
+						brake = Math.max(brake, 0.2 * (1 - ahead / 4));
+						tgt *= 0.92 + 0.08 * (ahead / 4);
 					}
 				}
-				// Reach race speed in ~1 second from green
-				if (c.aiSp == null) c.aiSp = tgt * 0.5;
-				const wantSp = tgt * (1 - brake * 0.4);
-				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 8.0);
-				if (c.aiSp < wantSp * 0.88) c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 4);
+				// Full race speed within ~1 second
+				if (c.aiSp == null) c.aiSp = tgt * 0.4;
+				const wantSp = Math.max(8, tgt * (1 - brake * 0.35));
+				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 10);
 				const sp = c.aiSp;
-				// Advance along track
-				s = s + sp * dt;
-				// Designated line — low-pass so lateral target never jumps
-				const idealLat = racingLine(s, q);
+				// Advance distance along track at true speed
+				c.aiS = ((c.aiS + sp * dt) % PER + PER) % PER;
+				const idealLat = racingLine(c.aiS, q);
 				if (c.lane == null || !isFinite(c.lane)) c.lane = idealLat;
-				c.lane += (idealLat - c.lane) * Math.min(1, dt * 2.0); // slow lateral changes only
-				const pos = cl(s, c.lane);
-				const path = cl(s, 0);
+				c.lane += (idealLat - c.lane) * Math.min(1, dt * 3);
+				const pos = cl(c.aiS, c.lane);
+				const path = cl(c.aiS, 0);
 				const pathH = Math.atan2(path.tx, path.tz);
-				// Strong blend onto spline position (kills up/down weave)
-				const blend = 1 - Math.exp(-dt * 7);
-				c.x += (pos.x - c.x) * blend;
-				c.z += (pos.z - c.z) * blend;
-				c.h = lerpAngle(c.h, pathH, blend);
-				// Velocity along tangent only (no lateral slide)
+				// SNAP to line — this was the bug (old soft blend made them crawl at ~10 mph)
+				c.x = pos.x;
+				c.z = pos.z;
+				c.h = pathH;
 				c.vx = path.tx * sp;
 				c.vz = path.tz * sp;
 				c.av = 0;
 				c.steer = 0;
 				c.steerv = 0;
 				c.slip = 0;
-				c.roll += (0 - c.roll) * Math.min(1, dt * 5);
-				// Mild tire wear so HUD stays honest
-				c.tire = Math.max(0.4, (c.tire || 1) - dt * sp * 0.00001);
+				c.roll *= Math.max(0, 1 - dt * 5);
+				c.tire = Math.max(0.5, (c.tire || 1) - dt * sp * 0.00001);
 			}
 			// note: steer sign: positive st turns right? h increases -> heading rotates toward +x from +z (left turn when viewed from above w/ camera)...
 			function progress(c) {
