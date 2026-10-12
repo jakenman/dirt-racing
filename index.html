@@ -27,6 +27,82 @@
 			user-select: none
 		}
 
+		/* Mobile: allow real controls to work */
+		input, select, textarea, button, #garage, #garage *, #menu, #menu *, #res, #res *, #editor, #etb, #etb * {
+			touch-action: manipulation !important;
+			pointer-events: auto !important;
+		}
+		#garage, #res {
+			touch-action: pan-y !important;
+			overflow-y: auto;
+			-webkit-overflow-scrolling: touch;
+		}
+		input, textarea {
+			-webkit-user-select: text !important;
+			user-select: text !important;
+		}
+		input[type=range] {
+			-webkit-appearance: none;
+			appearance: none;
+			height: 28px;
+			background: transparent;
+			touch-action: pan-x !important;
+		}
+		input[type=range]::-webkit-slider-runnable-track {
+			height: 8px;
+			background: #444;
+			border-radius: 4px;
+		}
+		input[type=range]::-webkit-slider-thumb {
+			-webkit-appearance: none;
+			appearance: none;
+			width: 28px;
+			height: 28px;
+			border-radius: 50%;
+			background: #ffd23f;
+			margin-top: -10px;
+			border: 2px solid #000;
+		}
+		#res {
+			overflow-y: auto;
+			-webkit-overflow-scrolling: touch;
+			padding: 16px;
+			padding-bottom: max(20px, env(safe-area-inset-bottom));
+		}
+		#res .resBtns {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+			width: min(280px, 90vw);
+			margin-top: 12px;
+		}
+		#res .resBtns button {
+			width: 100%;
+			min-height: 48px;
+			font-size: 18px;
+		}
+		#garage input[type=text] {
+			font-size: 28px;
+			width: 100px;
+			text-align: center;
+			font-weight: bold;
+			border-radius: 8px;
+			border: 2px solid #ffd23f;
+			padding: 8px;
+			background: #fff;
+			color: #000;
+		}
+		.stepBtn {
+			width: 48px;
+			height: 48px;
+			font-size: 24px;
+			border-radius: 8px;
+			background: #555;
+			color: #fff;
+			border: 0;
+			font-weight: bold;
+		}
+
 		#hud {
 			position: fixed;
 			top: 58px;
@@ -278,22 +354,27 @@
 		<h1 style="color:#ffd23f;margin:0;font-size:32px">SETUP GARAGE</h1>
 		<div style="font-size:14px;opacity:.85" id="gClass"></div>
 		<div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;max-width:520px">
-			<div style="background:rgba(255,255,255,.08);padding:14px 18px;border-radius:10px;min-width:240px">
+			<div style="background:rgba(255,255,255,.08);padding:14px 18px;border-radius:10px;min-width:260px;width:100%;max-width:340px">
 				<div style="font-weight:bold;margin-bottom:8px;color:#ffd23f">Weight Bias</div>
-				<div style="font-size:12px;opacity:.8;margin-bottom:6px">Left ← heavy · Right → heavy<br>Affects how the
-					car wants to slide in the corners</div>
-				<input id="gBias" type="range" min="-100" max="100" value="0" style="width:100%">
-				<div style="display:flex;justify-content:space-between;font-size:12px"><span>LEFT</span><span
-						id="gBiasVal">CENTER</span><span>RIGHT</span></div>
+				<div style="font-size:12px;opacity:.8;margin-bottom:8px">Left heavy bites left corners harder</div>
+				<div style="display:flex;align-items:center;gap:10px;justify-content:center">
+					<button type="button" class="stepBtn" id="gBiasL">◀</button>
+					<input id="gBias" type="range" min="-100" max="100" value="0" step="5" style="flex:1;min-width:120px">
+					<button type="button" class="stepBtn" id="gBiasR">▶</button>
+				</div>
+				<div style="display:flex;justify-content:space-between;font-size:13px;margin-top:6px"><span>LEFT</span><span id="gBiasVal" style="font-weight:bold;color:#ffd23f">CENTER</span><span>RIGHT</span></div>
 			</div>
 			<div style="background:rgba(255,255,255,.08);padding:14px 18px;border-radius:10px;min-width:240px">
 				<div style="font-weight:bold;margin-bottom:8px;color:#ffd23f">Body Color</div>
 				<div id="gColors" style="display:flex;flex-wrap:wrap;gap:6px"></div>
 			</div>
-			<div style="background:rgba(255,255,255,.08);padding:14px 18px;border-radius:10px;min-width:240px">
+			<div style="background:rgba(255,255,255,.08);padding:14px 18px;border-radius:10px;min-width:260px;width:100%;max-width:340px">
 				<div style="font-weight:bold;margin-bottom:8px;color:#ffd23f">Number</div>
-				<input id="gNum" type="text" maxlength="3" value="1"
-					style="font-size:28px;width:80px;text-align:center;font-weight:bold;border-radius:6px;border:0;padding:4px">
+				<div style="display:flex;align-items:center;gap:10px;justify-content:center">
+					<button type="button" class="stepBtn" id="gNumDown">−</button>
+					<input id="gNum" type="text" inputmode="numeric" maxlength="3" value="1">
+					<button type="button" class="stepBtn" id="gNumUp">+</button>
+				</div>
 			</div>
 		</div>
 		<div style="font-size:12px;opacity:.7;max-width:400px;text-align:center;margin-top:4px">Tip: On dirt ovals most
@@ -326,10 +407,16 @@
 	</div>
 	<div id="res">
 		<h1 id="resTitle">Race Results</h1>
-		<div id="resSub" style="font-size:14px;opacity:.85;margin-bottom:8px"></div>
-		<table id="rt"></table><button id="again">Race Again</button><br><button id="nextPhase"
-			style="display:none;background:#ffd23f;margin-top:8px">Continue to Feature →</button><br><button
-			id="menuBtn">Change Class</button>
+		<div id="resSub" style="font-size:14px;opacity:.85;margin-bottom:8px;text-align:center;max-width:90vw"></div>
+		<div style="max-height:40vh;overflow-y:auto;-webkit-overflow-scrolling:touch;width:100%;max-width:420px">
+			<table id="rt" style="margin:0 auto"></table>
+		</div>
+		<div class="resBtns">
+			<button id="nextPhase" style="display:none;background:#ffd23f">Continue to Feature →</button>
+			<button id="again">Restart Race</button>
+			<button id="resGarage" style="background:#4a7">Garage Setup</button>
+			<button id="menuBtn" style="background:#555;color:#fff">Main Menu</button>
+		</div>
 	</div>
 	<script src="three.min.js"></script>
 	<script>
@@ -512,14 +599,15 @@
 			const isMobile = matchMedia('(pointer:coarse)').matches;
 			const ren = new THREE.WebGLRenderer({
 				antialias: !isMobile,
-				powerPreference: 'high-performance'
+				powerPreference: 'high-performance',
+				alpha: false
 			});
-			ren.setPixelRatio(Math.min(devicePixelRatio, isMobile ? 1.25 : 2));
+			ren.setPixelRatio(Math.min(devicePixelRatio, isMobile ? 1.5 : 2));
 			ren.setSize(innerWidth, innerHeight);
 			ren.shadowMap.enabled = !isMobile;
 			ren.shadowMap.type = THREE.PCFSoftShadowMap;
 			ren.toneMapping = THREE.ACESFilmicToneMapping;
-			ren.toneMappingExposure = 1.15;
+			ren.toneMappingExposure = isMobile ? 1.25 : 1.15;
 			document.body.prepend(ren.domElement);
 			const scene = new THREE.Scene();
 			scene.background = (() => {
@@ -528,10 +616,10 @@
 				c.height = 256;
 				const x = c.getContext('2d'),
 					g = x.createLinearGradient(0, 0, 0, 256);
-				g.addColorStop(0, '#0a1028');
+				g.addColorStop(0, '#081028');
 				g.addColorStop(0.4, '#1a2a5a');
 				g.addColorStop(0.65, '#5a4a6a');
-				g.addColorStop(0.82, '#c8783a');
+				g.addColorStop(0.82, '#e88840');
 				g.addColorStop(1, '#3a2218');
 				x.fillStyle = g;
 				x.fillRect(0, 0, 4, 256);
@@ -539,7 +627,7 @@
 				t.colorSpace = THREE.SRGBColorSpace;
 				return t
 			})();
-			scene.fog = new THREE.FogExp2(0x3a2a38, 0.0022);
+			scene.fog = new THREE.FogExp2(0x3a2a38, isMobile ? 0.0028 : 0.0022);
 			const cam = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 900);
 			scene.add(new THREE.HemisphereLight(0xc8d8ff, 0x4a3020, 0.55));
 			const sun = new THREE.DirectionalLight(0xffe8c8, 1.65);
@@ -1463,7 +1551,7 @@
 				const isP = i === 0;
 				const useCol = isP ? PLAYER_SETUP.color : col;
 				const useNum = isP ? PLAYER_SETUP.num : n;
-				const skillBase = [0, 0.96, 0.94, 0.92, 0.90, 0.88, 0.87, 0.85, 0.84, 0.83][i] || 0.82;
+				const skillBase = [0, 0.99, 0.985, 0.98, 0.975, 0.97, 0.965, 0.96, 0.955, 0.95][i] || 0.94;
 				return {
 					i,
 					name: isP ? 'You' : NAMES[i],
@@ -1488,7 +1576,7 @@
 					last: 0,
 					done: false,
 					finT: 0,
-					skill: skillBase + (Math.random() * 0.025 - 0.01),
+					skill: skillBase + (Math.random() * 0.012 - 0.004),
 					lane: 0,
 					laneT: (Math.random() - .5) * 6,
 					steerv: 0,
@@ -1731,27 +1819,38 @@
 				camMode ^= 1;
 				e.target.blur()
 			};
-			document.getElementById('again').onclick = initRace;
+			document.getElementById('again').onclick = () => {
+				document.getElementById('res').style.display = 'none';
+				msg.textContent = '';
+				initRace();
+			};
 
 			function openGarage(k) {
 				cls = k;
 				menu.style.display = 'none';
+				document.getElementById('res').style.display = 'none';
 				const g = document.getElementById('garage');
 				g.style.display = 'flex';
 				document.getElementById('gClass').textContent = k === 'sprint' ? 'Sprint Car — light, fast, tail-happy' :
 					'Dirt Truck — heavy, rolls, more grip';
-				document.getElementById('gBias').value = Math.round(PLAYER_SETUP.bias * 100) || 0;
+				const biasEl = document.getElementById('gBias');
+				biasEl.value = String(Math.round((PLAYER_SETUP.bias || 0) * 100));
 				updateBiasLabel();
 				document.getElementById('gNum').value = PLAYER_SETUP.num || '1';
 				const box = document.getElementById('gColors');
 				box.innerHTML = '';
 				GARAGE_COLORS.forEach(col => {
 					const b = document.createElement('button');
+					b.type = 'button';
 					b.style.cssText =
-						`width:36px;height:36px;border-radius:50%;background:#${new THREE.Color(col).getHexString()};border:3px solid ${PLAYER_SETUP.color===col?'#ffd23f':'#333'};padding:0;min-width:36px`;
-					b.onclick = () => {
+						`width:44px;height:44px;border-radius:50%;background:#${new THREE.Color(col).getHexString()};border:3px solid ${PLAYER_SETUP.color===col?'#ffd23f':'#333'};padding:0;min-width:44px`;
+					b.onclick = (e) => {
+						e.preventDefault();
 						PLAYER_SETUP.color = col;
-						openGarage(k)
+						// refresh borders only
+						box.querySelectorAll('button').forEach((btn, i) => {
+							btn.style.border = '3px solid ' + (GARAGE_COLORS[i] === col ? '#ffd23f' : '#333');
+						});
 					};
 					box.appendChild(b)
 				})
@@ -1763,11 +1862,40 @@
 				el.textContent = v === 0 ? 'CENTER' : (v < 0 ? Math.abs(v) + '% LEFT' : v + '% RIGHT');
 				el.style.color = v === 0 ? '#aaa' : (v < 0 ? '#6af' : '#f86')
 			}
-			document.getElementById('gBias').oninput = updateBiasLabel;
+			document.getElementById('gBias').addEventListener('input', updateBiasLabel);
+			document.getElementById('gBias').addEventListener('change', updateBiasLabel);
+			document.getElementById('gBiasL').onclick = (e) => {
+				e.preventDefault();
+				const el = document.getElementById('gBias');
+				el.value = String(Math.max(-100, (+el.value) - 10));
+				updateBiasLabel();
+			};
+			document.getElementById('gBiasR').onclick = (e) => {
+				e.preventDefault();
+				const el = document.getElementById('gBias');
+				el.value = String(Math.min(100, (+el.value) + 10));
+				updateBiasLabel();
+			};
+			document.getElementById('gNumDown').onclick = (e) => {
+				e.preventDefault();
+				const el = document.getElementById('gNum');
+				let n = parseInt(el.value, 10);
+				if (isNaN(n)) n = 1;
+				n = Math.max(0, n - 1);
+				el.value = String(n);
+			};
+			document.getElementById('gNumUp').onclick = (e) => {
+				e.preventDefault();
+				const el = document.getElementById('gNum');
+				let n = parseInt(el.value, 10);
+				if (isNaN(n)) n = 0;
+				n = Math.min(999, n + 1);
+				el.value = String(n);
+			};
 
 			function applySetup() {
 				PLAYER_SETUP.bias = (+document.getElementById('gBias').value) / 100;
-				PLAYER_SETUP.num = (document.getElementById('gNum').value || '1').slice(0, 3)
+				PLAYER_SETUP.num = String(document.getElementById('gNum').value || '1').replace(/\D/g, '').slice(0, 3) || '1';
 			}
 			document.getElementById('gQuick').onclick = () => {
 				applySetup();
@@ -1784,7 +1912,12 @@
 				menu.style.display = 'flex'
 			};
 			document.getElementById('nextPhase').onclick = () => {
+				document.getElementById('res').style.display = 'none';
 				startFeature()
+			};
+			document.getElementById('resGarage').onclick = () => {
+				document.getElementById('res').style.display = 'none';
+				openGarage(cls || 'sprint');
 			};
 			document.getElementById('pSprint').onclick = () => openGarage('sprint');
 			document.getElementById('pTruck').onclick = () => openGarage('truck');
@@ -1963,10 +2096,10 @@
 				want = Math.atan2(Math.sin(want), Math.cos(want));
 				const st = Math.max(-1, Math.min(1, -want * (2.2 + c.aggress * 0.4)));
 				// speed target: skill + corner speed + slight personality
-				let cornerFactor = inTurn ? (cls === 'truck' ? 0.70 : 0.78) + c.style * 0.06 : 1;
-				const tgt = S.maxv * (1 - 0.28 * c.dmg) * c.skill * cornerFactor;
-				let thr = sp < tgt * 0.92 ? 1 : sp < tgt ? 0.55 : 0.25;
-				if (brake > 0.2) thr *= (1 - brake);
+				let cornerFactor = inTurn ? (cls === 'truck' ? 0.82 : 0.88) + c.style * 0.05 : 1.02;
+				const tgt = S.maxv * (1 - 0.22 * c.dmg) * c.skill * cornerFactor;
+				let thr = sp < tgt * 0.97 ? 1 : sp < tgt ? 0.7 : 0.35;
+				if (brake > 0.25) thr *= (1 - brake * 0.85);
 				// trail brake a touch into turns if aggressive
 				if (inTurn && curv > 0.01 && sp > tgt * 0.95 && c.aggress > 0.5) brake = Math.max(brake, 0.18);
 				physics(c, thr, brake || (sp > tgt + 5 ? 0.45 : 0), -st, dt)
@@ -2054,9 +2187,16 @@
 				if (state === 'race' && player.done) {
 					state = 'fin';
 					tState = 0;
-					msg.textContent = 'FINISHED!'
+					msg.textContent = phase === 'heat' ? 'HEAT DONE!' : 'FINISHED!';
+					// soft-finish remaining AI so results don't hang
+					for (const c of cars) {
+						if (!c.done) {
+							c.done = true;
+							c.finT = raceT + (1 - (c.lap * 1.0 / Math.max(1, raceLaps))) * 8 + Math.random();
+						}
+					}
 				}
-				if (state === 'fin' && tState > 2.5 && document.getElementById('res').style.display !== 'flex') {
+				if (state === 'fin' && tState > 1.8 && document.getElementById('res').style.display !== 'flex') {
 					const order = [...cars].sort((a, b) => score(b) - score(a));
 					order.forEach((c, i) => {
 						c.heatPos = i + 1;
@@ -2068,8 +2208,9 @@
 						document.getElementById('resTitle').textContent = 'Heat Results';
 						document.getElementById('resSub').textContent =
 							'Heat 1 live · Heat 2 simulated · Lineup inverted for the Feature';
-						document.getElementById('nextPhase').style.display = 'inline-block';
-						document.getElementById('again').style.display = 'none';
+						document.getElementById('nextPhase').style.display = 'block';
+						document.getElementById('again').style.display = 'block';
+						document.getElementById('again').textContent = 'Restart Heat';
 						const lineup = buildFeatureLineup();
 						let html =
 							'<tr><td colspan="5" style="color:#ffd23f;font-weight:bold;padding-top:8px">HEAT 1</td></tr><tr><td>Pos</td><td>Driver</td><td>Laps</td><td>Time</td><td>Best</td></tr>';
@@ -2096,7 +2237,8 @@
 						document.getElementById('resSub').textContent = raceMode === 'full' ?
 							'What a battle. See you next week.' : '';
 						document.getElementById('nextPhase').style.display = 'none';
-						document.getElementById('again').style.display = 'inline-block';
+						document.getElementById('again').style.display = 'block';
+						document.getElementById('again').textContent = 'Restart Race';
 						document.getElementById('rt').innerHTML =
 							'<tr><td>Pos</td><td>Driver</td><td>Laps</td><td>Time</td><td>Best lap</td></tr>' +
 							order.map((c, i) =>
