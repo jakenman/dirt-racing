@@ -2086,10 +2086,10 @@
 				const curv = Math.max(curvAt(s), curvAt(s + 10));
 				const inTurn = curv > 0.005;
 				// Target speed by line quality + skill (best line = fastest)
-				// Top lines at or above player pace; pack still slower
-				const linePace = q === 0 ? 1.05 : q === 1 ? 1.03 : q === 2 ? 1.01 : (0.97 - Math.min(0.08, (q - 3) * 0.012));
-				const cornerFactor = inTurn ? (cls === 'truck' ? 0.93 : 0.97) : 1.06;
-				let tgt = S.maxv * (1 - 0.1 * (c.dmg || 0)) * Math.max(c.skill, 0.97) * cornerFactor * linePace;
+				// Aggressive pace — top AI clearly faster than a casual player lap
+				const linePace = q === 0 ? 1.22 : q === 1 ? 1.18 : q === 2 ? 1.14 : (1.08 - Math.min(0.1, (q - 3) * 0.015));
+				const cornerFactor = inTurn ? (cls === 'truck' ? 0.98 : 1.02) : 1.12;
+				let tgt = S.maxv * linePace * cornerFactor;
 				// Traffic: lift if someone is immediately ahead on similar line
 				let brake = 0;
 				for (const o of cars) {
@@ -2100,15 +2100,16 @@
 						fz = Math.cos(c.h);
 					const ahead = dx * fx + dz * fz,
 						side = dx * fz - dz * fx;
-					if (ahead > 0.3 && ahead < 7 && Math.abs(side) < 2.5) {
-						brake = Math.max(brake, 0.5 * (1 - ahead / 7));
-						tgt *= 0.7 + 0.3 * (ahead / 7);
+					if (ahead > 0.3 && ahead < 5 && Math.abs(side) < 2.0) {
+						brake = Math.max(brake, 0.3 * (1 - ahead / 5));
+						tgt *= 0.85 + 0.15 * (ahead / 5);
 					}
 				}
 				// Smooth speed
-				if (c.aiSp == null) c.aiSp = 0;
-				const wantSp = tgt * (1 - brake * 0.7);
-				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 4.0);
+				if (c.aiSp == null) c.aiSp = tgt * 0.85;
+				const wantSp = tgt * (1 - brake * 0.45);
+				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 6.0);
+				if (c.aiSp < tgt * 0.75) c.aiSp = tgt * 0.75;
 				const sp = c.aiSp;
 				// Advance along track
 				s = s + sp * dt;
