@@ -2050,16 +2050,12 @@
 			function aiDrive(c, dt) {
 				const p = proj(c.x, c.z);
 				const sp = Math.hypot(c.vx, c.vz);
-				c.laneT += (Math.random() - .5) * dt * (1.5 + c.aggress);
-				c.laneT = Math.max(-6, Math.min(6, c.laneT));
-				const curv = Math.max(curvAt(p.s), curvAt(p.s + 12), curvAt(p.s + 22));
+				const curv = Math.max(curvAt(p.s), curvAt(p.s + 10), curvAt(p.s + 18));
 				const inTurn = curv > 0.006;
-				// preferred line: low (inside) in turns, mid-high on straights; style mixes high/low
-				let prefer = inTurn ? (-4.5 + c.style * 2.5) : (1.5 + c.style * 2);
-				prefer += c.laneT * 0.4;
-				// traffic awareness + overtake / defend
-				let brake = 0,
-					block = 0;
+				// Stable racing line (no random weaving) — low in turns, slightly higher on straights
+				let targetLane = inTurn ? (-3.2 + c.style * 1.8) : (0.8 + c.style * 1.2);
+				// Traffic: small, smooth adjustments only
+				let brake = 0;
 				for (const o of cars) {
 					if (o === c || o.done) continue;
 					const dx = o.x - c.x,
@@ -2067,42 +2063,39 @@
 						fx = Math.sin(c.h),
 						fz = Math.cos(c.h);
 					const ahead = dx * fx + dz * fz,
-						side = dx * fz - dz * fx,
-						od = Math.hypot(dx, dz);
-					if (ahead > 0 && ahead < 16 && Math.abs(side) < 4.5) {
-						// slower car ahead → prepare pass on preferred side
+						side = dx * fz - dz * fx;
+					if (ahead > 0.5 && ahead < 14 && Math.abs(side) < 4) {
 						const oSp = Math.hypot(o.vx, o.vz);
-						if (oSp < sp - 2 && ahead < 10) {
-							prefer += (side > 0 ? -1 : 1) * (2.5 + c.aggress * 2);
-							if (ahead < 5 && c.aggress > 0.6) brake = Math.max(brake, 0.15)
-						} else if (ahead < 9) {
-							prefer += (side > 0 ? -1 : 1) * 4;
-							if (ahead < 5.5) brake = Math.max(brake, 0.35 + 0.2 * (1 - ahead / 5.5))
-						}
-					}
-					// defend if someone is closing from behind on inside
-					if (ahead < 0 && ahead > -8 && Math.abs(side) < 3.5) {
-						const closing = -ahead;
-						if (closing < 6 && c.aggress > 0.45) {
-							prefer += side * 0.8;
-							block = 1
+						// slide a bit offline to pass, never huge swings
+						if (oSp < sp - 1.5 && ahead < 11) {
+							targetLane += (side > 0 ? -1 : 1) * (1.2 + c.aggress * 0.8);
+							if (ahead < 4.5) brake = Math.max(brake, 0.2);
+						} else if (ahead < 7 && Math.abs(side) < 2.2) {
+							targetLane += (side > 0 ? -1 : 1) * 1.5;
+							if (ahead < 4) brake = Math.max(brake, 0.4);
 						}
 					}
 				}
-				prefer = Math.max(-7.5, Math.min(7.5, prefer));
-				const lookDist = 11 + sp * 0.4 + (inTurn ? 4 : 0);
-				const look = cl(p.s + lookDist, prefer);
+				targetLane = Math.max(-6.5, Math.min(6.5, targetLane));
+				// Smooth lane hold — kills up/down banking bobble
+				if (c.lane == null || !isFinite(c.lane)) c.lane = targetLane;
+				c.lane += (targetLane - c.lane) * Math.min(1, dt * 2.2);
+				// Look-ahead point on the chosen line
+				const lookDist = 9 + sp * 0.32 + (inTurn ? 3 : 0);
+				const look = cl(p.s + lookDist, c.lane);
 				let want = Math.atan2(look.x - c.x, look.z - c.z) - c.h;
 				want = Math.atan2(Math.sin(want), Math.cos(want));
-				const st = Math.max(-1, Math.min(1, -want * (2.2 + c.aggress * 0.4)));
-				// speed target: skill + corner speed + slight personality
-				let cornerFactor = inTurn ? (cls === 'truck' ? 0.82 : 0.88) + c.style * 0.05 : 1.02;
-				const tgt = S.maxv * (1 - 0.22 * c.dmg) * c.skill * cornerFactor;
-				let thr = sp < tgt * 0.97 ? 1 : sp < tgt ? 0.7 : 0.35;
-				if (brake > 0.25) thr *= (1 - brake * 0.85);
-				// trail brake a touch into turns if aggressive
-				if (inTurn && curv > 0.01 && sp > tgt * 0.95 && c.aggress > 0.5) brake = Math.max(brake, 0.18);
-				physics(c, thr, brake || (sp > tgt + 5 ? 0.45 : 0), -st, dt)
+				// Damped steering (no oscillation)
+				const rawSt = Math.max(-1, Math.min(1, -want * 1.35));
+				if (c.steerv == null) c.steerv = 0;
+				c.steerv += (rawSt - c.steerv) * Math.min(1, dt * 7);
+				// Speed: competitive but controlled
+				let cornerFactor = inTurn ? (cls === 'truck' ? 0.84 : 0.90) + c.style * 0.04 : 1.02;
+				const tgt = S.maxv * (1 - 0.2 * c.dmg) * c.skill * cornerFactor;
+				let thr = sp < tgt * 0.96 ? 1 : sp < tgt ? 0.65 : 0.3;
+				if (brake > 0.2) thr *= (1 - brake * 0.9);
+				if (inTurn && curv > 0.012 && sp > tgt * 0.98) brake = Math.max(brake, 0.12);
+				physics(c, thr, brake || (sp > tgt + 6 ? 0.4 : 0), -c.steerv, dt);
 			}
 			// note: steer sign: positive st turns right? h increases -> heading rotates toward +x from +z (left turn when viewed from above w/ camera)...
 			function progress(c) {
