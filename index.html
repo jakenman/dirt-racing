@@ -2101,10 +2101,10 @@
 						tgt *= 0.92 + 0.08 * (ahead / 4);
 					}
 				}
-				// Full race speed within ~1 second
-				if (c.aiSp == null) c.aiSp = tgt * 0.4;
-				const wantSp = Math.max(8, tgt * (1 - brake * 0.35));
-				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 10);
+				// Gradual launch — build to race speed over a few seconds (not a teleport)
+				if (c.aiSp == null) c.aiSp = tgt * 0.15;
+				const wantSp = Math.max(6, tgt * (1 - brake * 0.35));
+				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 2.2);
 				const sp = c.aiSp;
 				// Advance distance along track at true speed
 				c.aiS = ((c.aiS + sp * dt) % PER + PER) % PER;
