@@ -2086,9 +2086,10 @@
 				const curv = Math.max(curvAt(s), curvAt(s + 10));
 				const inTurn = curv > 0.005;
 				// Target speed by line quality + skill (best line = fastest)
-				const linePace = 1 - Math.min(0.11, q * 0.012);
-				const cornerFactor = inTurn ? (cls === 'truck' ? 0.86 : 0.91) : 1.04;
-				let tgt = S.maxv * (1 - 0.12 * (c.dmg || 0)) * c.skill * cornerFactor * linePace;
+				// Top lines at or above player pace; pack still slower
+				const linePace = q === 0 ? 1.05 : q === 1 ? 1.03 : q === 2 ? 1.01 : (0.97 - Math.min(0.08, (q - 3) * 0.012));
+				const cornerFactor = inTurn ? (cls === 'truck' ? 0.93 : 0.97) : 1.06;
+				let tgt = S.maxv * (1 - 0.1 * (c.dmg || 0)) * Math.max(c.skill, 0.97) * cornerFactor * linePace;
 				// Traffic: lift if someone is immediately ahead on similar line
 				let brake = 0;
 				for (const o of cars) {
@@ -2107,7 +2108,7 @@
 				// Smooth speed
 				if (c.aiSp == null) c.aiSp = 0;
 				const wantSp = tgt * (1 - brake * 0.7);
-				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 2.5);
+				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 4.0);
 				const sp = c.aiSp;
 				// Advance along track
 				s = s + sp * dt;
