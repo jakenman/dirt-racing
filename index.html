@@ -2050,11 +2050,15 @@
 			function aiDrive(c, dt) {
 				const p = proj(c.x, c.z);
 				const sp = Math.hypot(c.vx, c.vz);
-				const curv = Math.max(curvAt(p.s), curvAt(p.s + 10), curvAt(p.s + 18));
-				const inTurn = curv > 0.006;
-				// Stable racing line (no random weaving) — low in turns, slightly higher on straights
-				let targetLane = inTurn ? (-3.2 + c.style * 1.8) : (0.8 + c.style * 1.2);
-				// Traffic: small, smooth adjustments only
+				const path = cl(p.s, 0);
+				const pathH = Math.atan2(path.tx, path.tz);
+				// lateral offset from centerline (same units as cl off)
+				const lat = p.d - R;
+				const curv = Math.max(curvAt(p.s), curvAt(p.s + 8), curvAt(p.s + 16));
+				const inTurn = curv > 0.005;
+				// Real dirt line: bottom in the turns, drift out slightly on exit/straights
+				let targetLat = inTurn ? (-2.8 - c.style * 1.2) : (0.2 + c.style * 1.4);
+				// Traffic: mild offline only
 				let brake = 0;
 				for (const o of cars) {
 					if (o === c || o.done) continue;
@@ -2064,38 +2068,46 @@
 						fz = Math.cos(c.h);
 					const ahead = dx * fx + dz * fz,
 						side = dx * fz - dz * fx;
-					if (ahead > 0.5 && ahead < 14 && Math.abs(side) < 4) {
+					if (ahead > 1 && ahead < 12 && Math.abs(side) < 3.5) {
 						const oSp = Math.hypot(o.vx, o.vz);
-						// slide a bit offline to pass, never huge swings
-						if (oSp < sp - 1.5 && ahead < 11) {
-							targetLane += (side > 0 ? -1 : 1) * (1.2 + c.aggress * 0.8);
-							if (ahead < 4.5) brake = Math.max(brake, 0.2);
-						} else if (ahead < 7 && Math.abs(side) < 2.2) {
-							targetLane += (side > 0 ? -1 : 1) * 1.5;
-							if (ahead < 4) brake = Math.max(brake, 0.4);
+						if (oSp < sp - 1 && ahead < 9) {
+							targetLat += (side > 0 ? -0.9 : 0.9) * (0.8 + c.aggress * 0.5);
+							if (ahead < 4) brake = Math.max(brake, 0.25);
+						} else if (ahead < 5.5 && Math.abs(side) < 2) {
+							targetLat += side > 0 ? -1.2 : 1.2;
+							brake = Math.max(brake, 0.35);
 						}
 					}
 				}
-				targetLane = Math.max(-6.5, Math.min(6.5, targetLane));
-				// Smooth lane hold — kills up/down banking bobble
-				if (c.lane == null || !isFinite(c.lane)) c.lane = targetLane;
-				c.lane += (targetLane - c.lane) * Math.min(1, dt * 2.2);
-				// Look-ahead point on the chosen line
-				const lookDist = 9 + sp * 0.32 + (inTurn ? 3 : 0);
-				const look = cl(p.s + lookDist, c.lane);
-				let want = Math.atan2(look.x - c.x, look.z - c.z) - c.h;
-				want = Math.atan2(Math.sin(want), Math.cos(want));
-				// Damped steering (no oscillation)
-				const rawSt = Math.max(-1, Math.min(1, -want * 1.35));
+				// Stay in safe track band — never drive the walls
+				const latMin = -W / 2 + 2.8,
+					latMax = W / 2 - 2.5;
+				targetLat = Math.max(latMin, Math.min(latMax, targetLat));
+				if (c.lane == null || !isFinite(c.lane)) c.lane = lat;
+				c.lane += (targetLat - c.lane) * Math.min(1, dt * 1.6);
+				// Heading error vs track tangent
+				let hErr = pathH - c.h;
+				hErr = Math.atan2(Math.sin(hErr), Math.cos(hErr));
+				const latErr = lat - c.lane;
+				// Path follow: align to tangent + correct lateral error (P control)
+				// Player: +steer = left. Too far outside (lat high) → need left → +steer
+				let rawSt = hErr * 1.5 + latErr * 0.22;
+				// Strong wall avoidance before impact
+				if (lat < latMin + 0.5) rawSt += (latMin + 0.5 - lat) * 0.5;
+				if (lat > latMax - 0.5) rawSt -= (lat - (latMax - 0.5)) * 0.5;
+				rawSt = Math.max(-0.95, Math.min(0.95, rawSt));
 				if (c.steerv == null) c.steerv = 0;
-				c.steerv += (rawSt - c.steerv) * Math.min(1, dt * 7);
-				// Speed: competitive but controlled
-				let cornerFactor = inTurn ? (cls === 'truck' ? 0.84 : 0.90) + c.style * 0.04 : 1.02;
-				const tgt = S.maxv * (1 - 0.2 * c.dmg) * c.skill * cornerFactor;
-				let thr = sp < tgt * 0.96 ? 1 : sp < tgt ? 0.65 : 0.3;
-				if (brake > 0.2) thr *= (1 - brake * 0.9);
-				if (inTurn && curv > 0.012 && sp > tgt * 0.98) brake = Math.max(brake, 0.12);
-				physics(c, thr, brake || (sp > tgt + 6 ? 0.4 : 0), -c.steerv, dt);
+				c.steerv += (rawSt - c.steerv) * Math.min(1, dt * 6);
+				// Competitive pace — hold the bottom, carry speed
+				const cornerFactor = inTurn ? (cls === 'truck' ? 0.86 : 0.91) + c.style * 0.03 : 1.03;
+				const tgt = S.maxv * (1 - 0.18 * c.dmg) * c.skill * cornerFactor;
+				let thr = sp < tgt * 0.95 ? 1 : sp < tgt ? 0.6 : 0.25;
+				if (brake > 0.15) thr *= 1 - brake * 0.85;
+				// If sideways or near wall, ease up so they don't bounce
+				if (Math.abs(c.slip || 0) > 0.45 || lat < latMin + 1 || lat > latMax - 1) thr *= 0.7;
+				const brk = brake || (sp > tgt + 5 ? 0.35 : 0);
+				// Same sign convention as player input path into physics
+				physics(c, thr, brk, c.steerv, dt);
 			}
 			// note: steer sign: positive st turns right? h increases -> heading rotates toward +x from +z (left turn when viewed from above w/ camera)...
 			function progress(c) {
