@@ -1644,6 +1644,7 @@
 				clearCars();
 				allDrivers = [];
 				COLORS.forEach(([col, n], i) => allDrivers.push(makeCarData(i, col, n)));
+				assignRacingLines();
 				if (raceMode === 'quick') {
 					raceLaps = 10;
 					phase = 'feature';
@@ -2047,19 +2048,79 @@
 					}
 			}
 
+			function racingLine(s, quality) {
+				// Pre-designated dirt lines for current track (uses live curvature)
+				// quality 0 = best (bottom groove), 1 = 2nd, 2 = 3rd, 3+ = pack / worse
+				const c0 = curvAt(s),
+					c1 = curvAt(s + 10),
+					c2 = curvAt(s + 20);
+				const curv = Math.max(c0, c1, c2);
+				let groove;
+				if (curv > 0.01) groove = -3.6; // deep in the turn — best
+				else if (curv > 0.006) groove = -2.4;
+				else if (curv > 0.003) groove = -0.6;
+				else groove = 1.2; // straights — slightly up
+				// Top 3: best / semi-best / third; rest sit above or muddy middle
+				const offsets = [0, 1.15, 2.2, 3.1, 3.8, 2.6, 4.2, 1.7, 3.4, 4.5];
+				const off = offsets[Math.min(quality, offsets.length - 1)] || 3;
+				// slight s-based wobble only for pack (quality>=3), not top 3
+				let wobble = 0;
+				if (quality >= 3) wobble = Math.sin(s * 0.04 + quality) * 0.55;
+				const latMin = -W / 2 + 2.6,
+					latMax = W / 2 - 2.4;
+				return Math.max(latMin, Math.min(latMax, groove + off + wobble));
+			}
+
+			function assignRacingLines() {
+				// Rank AI by skill — best skill gets line 0 (winner groove)
+				const ais = allDrivers.filter(d => d.ai).slice().sort((a, b) => b.skill - a.skill);
+				ais.forEach((d, i) => {
+					d.lineQ = i; // 0 = best line
+				});
+				const p = allDrivers.find(d => !d.ai);
+				if (p) p.lineQ = 99; // player not forced to a line
+			}
+
 			function aiDrive(c, dt) {
 				const p = proj(c.x, c.z);
 				const sp = Math.hypot(c.vx, c.vz);
+				const q = c.lineQ != null ? c.lineQ : 5;
+				// Locked target lateral for THIS car's designated line
+				const targetLat = racingLine(p.s, q);
+				const lookLat = racingLine(p.s + 12 + sp * 0.25, q);
+				const lat = p.d - R;
 				const path = cl(p.s, 0);
 				const pathH = Math.atan2(path.tx, path.tz);
-				// lateral offset from centerline (same units as cl off)
-				const lat = p.d - R;
-				const curv = Math.max(curvAt(p.s), curvAt(p.s + 8), curvAt(p.s + 16));
+				// HARD hold: pull car onto its line (arcade rail assist — stops wall surfing)
+				const latErr = lat - targetLat;
+				const pull = Math.max(-2.2, Math.min(2.2, latErr * 0.55));
+				c.x -= path.nx * pull * Math.min(1, dt * 8);
+				c.z -= path.nz * pull * Math.min(1, dt * 8);
+				// Kill sideways velocity into/away from line so they stop sliding across the track
+				const rx = path.nx,
+					rz = path.nz;
+				const vLat = c.vx * rx + c.vz * rz;
+				c.vx -= rx * vLat * Math.min(1, dt * 6);
+				c.vz -= rz * vLat * Math.min(1, dt * 6);
+				// Steer to match track + stay on line
+				let hErr = pathH - c.h;
+				hErr = Math.atan2(Math.sin(hErr), Math.cos(hErr));
+				const look = cl(p.s + 10 + sp * 0.3, lookLat);
+				let want = Math.atan2(look.x - c.x, look.z - c.z) - c.h;
+				want = Math.atan2(Math.sin(want), Math.cos(want));
+				let rawSt = hErr * 1.1 + (-want) * 0.8 + latErr * 0.12;
+				rawSt = Math.max(-0.85, Math.min(0.85, rawSt));
+				if (c.steerv == null) c.steerv = 0;
+				c.steerv += (rawSt - c.steerv) * Math.min(1, dt * 8);
+				// Pace by line quality — best line can carry more speed
+				const curv = Math.max(curvAt(p.s), curvAt(p.s + 12));
 				const inTurn = curv > 0.005;
-				// Real dirt line: bottom in the turns, drift out slightly on exit/straights
-				let targetLat = inTurn ? (-2.8 - c.style * 1.2) : (0.2 + c.style * 1.4);
-				// Traffic: mild offline only
+				const linePace = 1 - Math.min(0.12, q * 0.012); // top lines slightly faster
+				const cornerFactor = inTurn ? (cls === 'truck' ? 0.88 : 0.93) : 1.04;
+				const tgt = S.maxv * (1 - 0.15 * c.dmg) * c.skill * cornerFactor * linePace;
+				let thr = sp < tgt * 0.94 ? 1 : sp < tgt ? 0.55 : 0.2;
 				let brake = 0;
+				// traffic brake only (don't change line much — line is assigned)
 				for (const o of cars) {
 					if (o === c || o.done) continue;
 					const dx = o.x - c.x,
@@ -2068,46 +2129,13 @@
 						fz = Math.cos(c.h);
 					const ahead = dx * fx + dz * fz,
 						side = dx * fz - dz * fx;
-					if (ahead > 1 && ahead < 12 && Math.abs(side) < 3.5) {
-						const oSp = Math.hypot(o.vx, o.vz);
-						if (oSp < sp - 1 && ahead < 9) {
-							targetLat += (side > 0 ? -0.9 : 0.9) * (0.8 + c.aggress * 0.5);
-							if (ahead < 4) brake = Math.max(brake, 0.25);
-						} else if (ahead < 5.5 && Math.abs(side) < 2) {
-							targetLat += side > 0 ? -1.2 : 1.2;
-							brake = Math.max(brake, 0.35);
-						}
+					if (ahead > 0.5 && ahead < 6 && Math.abs(side) < 2.2) {
+						brake = Math.max(brake, 0.4 * (1 - ahead / 6));
+						thr *= 0.5;
 					}
 				}
-				// Stay in safe track band — never drive the walls
-				const latMin = -W / 2 + 2.8,
-					latMax = W / 2 - 2.5;
-				targetLat = Math.max(latMin, Math.min(latMax, targetLat));
-				if (c.lane == null || !isFinite(c.lane)) c.lane = lat;
-				c.lane += (targetLat - c.lane) * Math.min(1, dt * 1.6);
-				// Heading error vs track tangent
-				let hErr = pathH - c.h;
-				hErr = Math.atan2(Math.sin(hErr), Math.cos(hErr));
-				const latErr = lat - c.lane;
-				// Path follow: align to tangent + correct lateral error (P control)
-				// Player: +steer = left. Too far outside (lat high) → need left → +steer
-				let rawSt = hErr * 1.5 + latErr * 0.22;
-				// Strong wall avoidance before impact
-				if (lat < latMin + 0.5) rawSt += (latMin + 0.5 - lat) * 0.5;
-				if (lat > latMax - 0.5) rawSt -= (lat - (latMax - 0.5)) * 0.5;
-				rawSt = Math.max(-0.95, Math.min(0.95, rawSt));
-				if (c.steerv == null) c.steerv = 0;
-				c.steerv += (rawSt - c.steerv) * Math.min(1, dt * 6);
-				// Competitive pace — hold the bottom, carry speed
-				const cornerFactor = inTurn ? (cls === 'truck' ? 0.86 : 0.91) + c.style * 0.03 : 1.03;
-				const tgt = S.maxv * (1 - 0.18 * c.dmg) * c.skill * cornerFactor;
-				let thr = sp < tgt * 0.95 ? 1 : sp < tgt ? 0.6 : 0.25;
-				if (brake > 0.15) thr *= 1 - brake * 0.85;
-				// If sideways or near wall, ease up so they don't bounce
-				if (Math.abs(c.slip || 0) > 0.45 || lat < latMin + 1 || lat > latMax - 1) thr *= 0.7;
-				const brk = brake || (sp > tgt + 5 ? 0.35 : 0);
-				// Same sign convention as player input path into physics
-				physics(c, thr, brk, c.steerv, dt);
+				if (Math.abs(c.slip || 0) > 0.5) thr *= 0.65;
+				physics(c, thr, brake || (sp > tgt + 6 ? 0.3 : 0), c.steerv, dt);
 			}
 			// note: steer sign: positive st turns right? h increases -> heading rotates toward +x from +z (left turn when viewed from above w/ camera)...
 			function progress(c) {
