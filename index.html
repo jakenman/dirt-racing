@@ -629,8 +629,8 @@
 			})();
 			scene.fog = new THREE.FogExp2(0x3a2a38, isMobile ? 0.0028 : 0.0022);
 			const cam = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 900);
-			scene.add(new THREE.HemisphereLight(0xc8d8ff, 0x4a3020, 0.55));
-			const sun = new THREE.DirectionalLight(0xffe8c8, 1.65);
+			scene.add(new THREE.HemisphereLight(0xd0e4ff, 0x5a3820, 0.65));
+			const sun = new THREE.DirectionalLight(0xffe0b0, isMobile ? 1.85 : 1.65);
 			sun.position.set(80, 120, 40);
 			sun.castShadow = !isMobile;
 			if (!isMobile) {
@@ -648,7 +648,7 @@
 			const fill = new THREE.DirectionalLight(0x88aacc, 0.35);
 			fill.position.set(-40, 30, -20);
 			scene.add(fill);
-			const amb = new THREE.AmbientLight(0x334455, 0.25);
+			const amb = new THREE.AmbientLight(0x445566, isMobile ? 0.4 : 0.28);
 			scene.add(amb);
 
 			function tex(base, n, sz = 256) {
@@ -2049,20 +2049,16 @@
 			}
 
 			function racingLine(s, quality) {
-				// Pre-set dirt grooves for the current track shape
-				const curv = Math.max(curvAt(s), curvAt(s + 10), curvAt(s + 18));
-				let groove;
-				if (curv > 0.01) groove = -3.5;
-				else if (curv > 0.006) groove = -2.2;
-				else if (curv > 0.003) groove = -0.5;
-				else groove = 1.0;
-				const offsets = [0, 1.1, 2.1, 3.0, 3.7, 2.5, 4.0, 1.6, 3.3, 4.4];
+				// Smooth groove from track curvature (no hard steps = no bobbing)
+				const curv = Math.max(curvAt(s), curvAt(s + 6), curvAt(s + 12), curvAt(s + 18));
+				// Map curvature continuously to lateral offset (low in turns)
+				const t = Math.max(0, Math.min(1, curv / 0.014));
+				const groove = 1.1 * (1 - t) + (-3.4) * t; // straight ~+1.1 → turn ~-3.4
+				const offsets = [0, 1.05, 2.0, 2.9, 3.6, 2.4, 3.9, 1.5, 3.2, 4.2];
 				const off = offsets[Math.min(quality | 0, offsets.length - 1)] || 3;
-				let wobble = 0;
-				if (quality >= 3) wobble = Math.sin(s * 0.035 + quality * 1.7) * 0.45;
-				const latMin = -W / 2 + 2.6,
-					latMax = W / 2 - 2.4;
-				return Math.max(latMin, Math.min(latMax, groove + off + wobble));
+				const latMin = -W / 2 + 2.5,
+					latMax = W / 2 - 2.3;
+				return Math.max(latMin, Math.min(latMax, groove + off));
 			}
 
 			function assignRacingLines() {
@@ -2074,47 +2070,27 @@
 				if (p) p.lineQ = 99;
 			}
 
+			function lerpAngle(a, b, t) {
+				let d = b - a;
+				d = Math.atan2(Math.sin(d), Math.cos(d));
+				return a + d * t;
+			}
+
 			function aiDrive(c, dt) {
-				const p = proj(c.x, c.z);
-				const sp = Math.hypot(c.vx, c.vz);
+				// Arcade spline AI: ride a fixed racing line on the track centerline path.
+				// Used by many oval/arcade racers so AI never wall-surfs or bobs on the bank.
 				const q = c.lineQ != null ? c.lineQ : 5;
-				const targetLat = racingLine(p.s, q);
-				const lat = p.d - R;
-				const path = cl(p.s, 0);
-				const pathH = Math.atan2(path.tx, path.tz);
-				const curv = Math.max(curvAt(p.s), curvAt(p.s + 8), curvAt(p.s + 16));
+				const p = proj(c.x, c.z);
+				// Keep s in sync from projection (stable after collisions)
+				let s = p.s;
+				const curv = Math.max(curvAt(s), curvAt(s + 10));
 				const inTurn = curv > 0.005;
-				// --- PURE PURSUIT: look far enough ahead that they MUST turn for corners ---
-				const lookDist = (inTurn ? 16 : 12) + sp * 0.5;
-				const lookLat = racingLine(p.s + lookDist, q);
-				const look = cl(p.s + lookDist, lookLat);
-				let want = Math.atan2(look.x - c.x, look.z - c.z) - c.h;
-				want = Math.atan2(Math.sin(want), Math.cos(want));
-				// Heading vs track tangent (keeps them pointed around the oval)
-				let hErr = pathH - c.h;
-				hErr = Math.atan2(Math.sin(hErr), Math.cos(hErr));
-				// Curvature feedforward — force turn entry (left = +, same as player A key)
-				const feed = curv * (10 + sp * 0.35);
-				// Combine: pursuit + tangent align + corner feed + slight line correct
-				const latErr = lat - targetLat;
-				let rawSt = want * 1.6 + hErr * 0.9 + feed * 0.85 + latErr * 0.08;
-				rawSt = Math.max(-1, Math.min(1, rawSt));
-				if (c.steerv == null) c.steerv = 0;
-				c.steerv += (rawSt - c.steerv) * Math.min(1, dt * 10);
-				// Soft line hold (lighter so it doesn't kill rotation)
-				const pull = Math.max(-1.2, Math.min(1.2, latErr * 0.35));
-				c.x -= path.nx * pull * Math.min(1, dt * 5);
-				c.z -= path.nz * pull * Math.min(1, dt * 5);
-				const vLat = c.vx * path.nx + c.vz * path.nz;
-				c.vx -= path.nx * vLat * Math.min(0.5, dt * 3);
-				c.vz -= path.nz * vLat * Math.min(0.5, dt * 3);
-				// Pace
-				const linePace = 1 - Math.min(0.1, q * 0.011);
-				const cornerFactor = inTurn ? (cls === 'truck' ? 0.87 : 0.92) : 1.03;
-				const tgt = S.maxv * (1 - 0.15 * c.dmg) * c.skill * cornerFactor * linePace;
-				let thr = sp < tgt * 0.93 ? 1 : sp < tgt ? 0.5 : 0.2;
+				// Target speed by line quality + skill (best line = fastest)
+				const linePace = 1 - Math.min(0.11, q * 0.012);
+				const cornerFactor = inTurn ? (cls === 'truck' ? 0.86 : 0.91) : 1.04;
+				let tgt = S.maxv * (1 - 0.12 * (c.dmg || 0)) * c.skill * cornerFactor * linePace;
+				// Traffic: lift if someone is immediately ahead on similar line
 				let brake = 0;
-				if (inTurn && sp > tgt * 1.02) brake = 0.15;
 				for (const o of cars) {
 					if (o === c || o.done) continue;
 					const dx = o.x - c.x,
@@ -2123,12 +2099,40 @@
 						fz = Math.cos(c.h);
 					const ahead = dx * fx + dz * fz,
 						side = dx * fz - dz * fx;
-					if (ahead > 0.5 && ahead < 6 && Math.abs(side) < 2.2) {
-						brake = Math.max(brake, 0.35 * (1 - ahead / 6));
-						thr *= 0.55;
+					if (ahead > 0.3 && ahead < 7 && Math.abs(side) < 2.5) {
+						brake = Math.max(brake, 0.5 * (1 - ahead / 7));
+						tgt *= 0.7 + 0.3 * (ahead / 7);
 					}
 				}
-				physics(c, thr, brake || (sp > tgt + 6 ? 0.3 : 0), c.steerv, dt);
+				// Smooth speed
+				if (c.aiSp == null) c.aiSp = 0;
+				const wantSp = tgt * (1 - brake * 0.7);
+				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 2.5);
+				const sp = c.aiSp;
+				// Advance along track
+				s = s + sp * dt;
+				// Designated line — low-pass so lateral target never jumps
+				const idealLat = racingLine(s, q);
+				if (c.lane == null || !isFinite(c.lane)) c.lane = idealLat;
+				c.lane += (idealLat - c.lane) * Math.min(1, dt * 2.0); // slow lateral changes only
+				const pos = cl(s, c.lane);
+				const path = cl(s, 0);
+				const pathH = Math.atan2(path.tx, path.tz);
+				// Strong blend onto spline position (kills up/down weave)
+				const blend = 1 - Math.exp(-dt * 7);
+				c.x += (pos.x - c.x) * blend;
+				c.z += (pos.z - c.z) * blend;
+				c.h = lerpAngle(c.h, pathH, blend);
+				// Velocity along tangent only (no lateral slide)
+				c.vx = path.tx * sp;
+				c.vz = path.tz * sp;
+				c.av = 0;
+				c.steer = 0;
+				c.steerv = 0;
+				c.slip = 0;
+				c.roll += (0 - c.roll) * Math.min(1, dt * 5);
+				// Mild tire wear so HUD stays honest
+				c.tire = Math.max(0.4, (c.tire || 1) - dt * sp * 0.00001);
 			}
 			// note: steer sign: positive st turns right? h increases -> heading rotates toward +x from +z (left turn when viewed from above w/ camera)...
 			function progress(c) {
