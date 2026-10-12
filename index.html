@@ -316,10 +316,19 @@
 			opacity: .85;
 			pointer-events: none
 		}
+	
+		#vignette {
+			position: fixed;
+			inset: 0;
+			pointer-events: none;
+			z-index: 2;
+			background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.45) 100%);
+		}
 	</style>
 </head>
 
 <body>
+	<div id="vignette"></div>
 	<button id="pauseB" style="position:fixed;top:8px;left:8px;font-size:20px;padding:6px 14px;z-index:3">II</button>
 	<div id="hud"></div>
 	<div id="pauseM"
@@ -607,7 +616,7 @@
 			ren.shadowMap.enabled = !isMobile;
 			ren.shadowMap.type = THREE.PCFSoftShadowMap;
 			ren.toneMapping = THREE.ACESFilmicToneMapping;
-			ren.toneMappingExposure = isMobile ? 1.25 : 1.15;
+			ren.toneMappingExposure = isMobile ? 1.35 : 1.2;
 			document.body.prepend(ren.domElement);
 			const scene = new THREE.Scene();
 			scene.background = (() => {
@@ -616,22 +625,22 @@
 				c.height = 256;
 				const x = c.getContext('2d'),
 					g = x.createLinearGradient(0, 0, 0, 256);
-				g.addColorStop(0, '#081028');
-				g.addColorStop(0.4, '#1a2a5a');
-				g.addColorStop(0.65, '#5a4a6a');
-				g.addColorStop(0.82, '#e88840');
-				g.addColorStop(1, '#3a2218');
+				g.addColorStop(0, '#060c20');
+				g.addColorStop(0.4, '#152850');
+				g.addColorStop(0.65, '#7a5070');
+				g.addColorStop(0.82, '#ff9a45');
+				g.addColorStop(1, '#4a2818');
 				x.fillStyle = g;
 				x.fillRect(0, 0, 4, 256);
 				const t = new THREE.CanvasTexture(c);
 				t.colorSpace = THREE.SRGBColorSpace;
 				return t
 			})();
-			scene.fog = new THREE.FogExp2(0x3a2a38, isMobile ? 0.0028 : 0.0022);
+			scene.fog = new THREE.FogExp2(0x4a3040, isMobile ? 0.0024 : 0.0020);
 			const cam = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 900);
-			scene.add(new THREE.HemisphereLight(0xd0e4ff, 0x5a3820, 0.65));
-			const sun = new THREE.DirectionalLight(0xffe0b0, isMobile ? 1.85 : 1.65);
-			sun.position.set(80, 120, 40);
+			scene.add(new THREE.HemisphereLight(0xe8f0ff, 0x6a4028, isMobile ? 0.75 : 0.65));
+			const sun = new THREE.DirectionalLight(0xffe4b8, isMobile ? 2.05 : 1.75);
+			sun.position.set(60, 100, 50);
 			sun.castShadow = !isMobile;
 			if (!isMobile) {
 				sun.shadow.mapSize.set(2048, 2048);
@@ -648,8 +657,18 @@
 			const fill = new THREE.DirectionalLight(0x88aacc, 0.35);
 			fill.position.set(-40, 30, -20);
 			scene.add(fill);
-			const amb = new THREE.AmbientLight(0x445566, isMobile ? 0.4 : 0.28);
+			const amb = new THREE.AmbientLight(0x556677, isMobile ? 0.45 : 0.3);
 			scene.add(amb);
+			// Cheap mobile env map from sky gradient (cars pick up sunset reflections)
+			try {
+				const pmrem = new THREE.PMREMGenerator(ren);
+				const envScene = new THREE.Scene();
+				envScene.background = scene.background;
+				const envTex = pmrem.fromScene(envScene, 0.04).texture;
+				scene.environment = envTex;
+				pmrem.dispose();
+			} catch (e) {}
+
 
 			function tex(base, n, sz = 256) {
 				const c = document.createElement('canvas');
@@ -1162,8 +1181,8 @@
 			const dirtMat = new THREE.MeshStandardMaterial({
 					map: dirtTex,
 					side: THREE.DoubleSide,
-					roughness: 0.92,
-					metalness: 0.02
+					roughness: isMobile ? 0.78 : 0.88,
+					metalness: 0.05
 				}),
 				wm = new THREE.MeshStandardMaterial({
 					color: 0xe8e8e8,
