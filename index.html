@@ -322,7 +322,7 @@
 			inset: 0;
 			pointer-events: none;
 			z-index: 2;
-			background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.45) 100%);
+			background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.38) 100%);
 		}
 	</style>
 </head>
@@ -616,7 +616,7 @@
 			ren.shadowMap.enabled = !isMobile;
 			ren.shadowMap.type = THREE.PCFSoftShadowMap;
 			ren.toneMapping = THREE.ACESFilmicToneMapping;
-			ren.toneMappingExposure = isMobile ? 1.35 : 1.2;
+			ren.toneMappingExposure = isMobile ? 1.4 : 1.22;
 			document.body.prepend(ren.domElement);
 			const scene = new THREE.Scene();
 			scene.background = (() => {
@@ -654,9 +654,12 @@
 				sun.shadow.radius = 2
 			}
 			scene.add(sun);
-			const fill = new THREE.DirectionalLight(0x88aacc, 0.35);
+			const fill = new THREE.DirectionalLight(0x99bbdd, 0.4);
 			fill.position.set(-40, 30, -20);
 			scene.add(fill);
+			const rim = new THREE.DirectionalLight(0xffaa66, isMobile ? 0.35 : 0.25);
+			rim.position.set(-30, 20, -80);
+			scene.add(rim);
 			const amb = new THREE.AmbientLight(0x556677, isMobile ? 0.45 : 0.3);
 			scene.add(amb);
 			// Cheap mobile env map from sky gradient (cars pick up sunset reflections)
@@ -2120,10 +2123,10 @@
 						tgt *= 0.92 + 0.08 * (ahead / 4);
 					}
 				}
-				// Gradual launch — build to race speed over a few seconds (not a teleport)
-				if (c.aiSp == null) c.aiSp = tgt * 0.15;
-				const wantSp = Math.max(6, tgt * (1 - brake * 0.35));
-				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 2.2);
+				// Launch matches player feel: ~3 seconds to race speed (~70 mph)
+				if (c.aiSp == null) c.aiSp = tgt * 0.08;
+				const wantSp = Math.max(5, tgt * (1 - brake * 0.35));
+				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 1.15);
 				const sp = c.aiSp;
 				// Advance distance along track at true speed
 				c.aiS = ((c.aiS + sp * dt) % PER + PER) % PER;
@@ -2302,12 +2305,11 @@
 					const sp = Math.hypot(c.vx, c.vz);
 					// realistic dirt spray when sliding hard
 					const slipA = Math.abs(c.slip || 0);
-					if (sp > 8 && slipA > 0.18 && Math.random() < Math.min(0.7, slipA * 1.8) * dt * 40) {
+					if (sp > 6 && slipA > 0.12 && Math.random() < Math.min(0.85, slipA * 2.2) * dt * 55) {
 						const rx = Math.cos(c.h),
 							rz = -Math.sin(c.h),
 							side = Math.sign(c.slip || 1);
-						puff(c.x + rx * side * 0.9 - Math.sin(c.h) * 1.2, y + 0.15, c.z + rz * side * 0.9 - Math.cos(c
-							.h) * 1.2, 0.35 + slipA * 0.5);
+						puff(c.x + rx * side * 0.9 - Math.sin(c.h) * 1.2, y + 0.2, c.z + rz * side * 0.9 - Math.cos(c.h) * 1.2, 0.5 + slipA * 0.55);
 					}
 					c.mesh.wheels.forEach((w, i) => {
 						w.children[0].rotation.x += sp * dt / 0.5;
@@ -2334,7 +2336,8 @@
 					cam.position.lerp(cp, Math.min(1, dt * 10));
 					look.set(P.x + fx * 4, py + 1.2, P.z + fz * 4);
 					cam.lookAt(look);
-					cam.fov = 70;
+					cam.fov = 68 + Math.min(10, Math.hypot(P.vx, P.vz) * 0.12);
+					cam.updateProjectionMatrix();
 					P.mesh.helmet.visible = true
 				} else {
 					cam.position.set(P.x - fx * (cls === 'truck' ? 0.1 : 0.2), py + (cls === 'truck' ? 1.75 : 1.55), P.z -
