@@ -2084,7 +2084,7 @@
 				const curv = Math.max(curvAt(c.aiS), curvAt(c.aiS + 10));
 				const inTurn = curv > 0.005;
 				// Player hits ~70-80 mph; leaders 90-100 so they actually compete
-				const targetMph = q === 0 ? 100 : q === 1 ? 96 : q === 2 ? 92 : (84 - Math.min(12, (q - 3) * 2));
+				const targetMph = q === 0 ? 82 : q === 1 ? 79 : q === 2 ? 76 : (72 - Math.min(10, (q - 3) * 2));
 				let tgt = targetMph / 2.237;
 				if (inTurn) tgt *= cls === 'truck' ? 0.95 : 0.98;
 				let brake = 0;
