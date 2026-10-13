@@ -107,16 +107,19 @@
 			position: fixed;
 			top: 58px;
 			left: 8px;
-			color: #fff;
-			font-size: 16px;
-			text-shadow: 1px 1px 2px #000;
-			line-height: 1.35;
-			pointer-events: none
+			color: #f0f0f0;
+			font-size: 15px;
+			font-family: system-ui, -apple-system, Arial, sans-serif;
+			text-shadow: 0 1px 3px #000, 0 0 12px rgba(0,0,0,0.8);
+			line-height: 1.4;
+			pointer-events: none;
+			letter-spacing: 0.02em;
 		}
 
 		#hud b {
-			font-size: 22px;
-			color: #ffd23f
+			font-size: 24px;
+			color: #ffd23f;
+			font-weight: 800;
 		}
 
 		#spd {
@@ -124,22 +127,27 @@
 			top: 8px;
 			right: 10px;
 			color: #fff;
-			font-size: 28px;
-			font-weight: bold;
-			text-shadow: 2px 2px 3px #000;
-			pointer-events: none
+			font-size: 34px;
+			font-weight: 900;
+			font-family: system-ui, -apple-system, Arial, sans-serif;
+			text-shadow: 0 2px 4px #000, 0 0 20px rgba(255,210,63,0.35);
+			pointer-events: none;
+			letter-spacing: -0.02em;
 		}
 
 		#msg {
 			position: fixed;
-			top: 30%;
+			top: 28%;
 			width: 100%;
 			text-align: center;
 			color: #ffd23f;
-			font-size: 72px;
-			font-weight: bold;
-			text-shadow: 3px 3px 6px #000;
-			pointer-events: none
+			font-size: 64px;
+			font-weight: 900;
+			font-family: system-ui, -apple-system, Arial, sans-serif;
+			text-shadow: 0 4px 0 #000, 0 0 40px rgba(255,120,0,0.5);
+			pointer-events: none;
+			letter-spacing: 0.06em;
+			text-transform: uppercase;
 		}
 
 		#res {
@@ -218,7 +226,7 @@
 			position: fixed;
 			inset: 0;
 			display: flex;
-			background: rgba(0, 0, 0, .7);
+			background: rgba(0, 0, 0, .78);
 			color: #fff;
 			align-items: center;
 			justify-content: center;
@@ -230,7 +238,10 @@
 		#menu h1 {
 			color: #ffd23f;
 			margin: 0 0 6px;
-			font-size: 40px
+			font-size: 44px;
+			font-weight: 900;
+			letter-spacing: 0.08em;
+			text-shadow: 0 0 30px rgba(255,140,0,0.55), 0 3px 0 #000;
 		}
 
 		#menu button {
@@ -322,7 +333,7 @@
 			inset: 0;
 			pointer-events: none;
 			z-index: 2;
-			background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.38) 100%);
+			background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%);
 		}
 	</style>
 </head>
@@ -616,7 +627,7 @@
 			ren.shadowMap.enabled = !isMobile;
 			ren.shadowMap.type = THREE.PCFSoftShadowMap;
 			ren.toneMapping = THREE.ACESFilmicToneMapping;
-			ren.toneMappingExposure = isMobile ? 1.4 : 1.22;
+			ren.toneMappingExposure = isMobile ? 1.55 : 1.35;
 			document.body.prepend(ren.domElement);
 			const scene = new THREE.Scene();
 			scene.background = (() => {
@@ -625,22 +636,23 @@
 				c.height = 256;
 				const x = c.getContext('2d'),
 					g = x.createLinearGradient(0, 0, 0, 256);
-				g.addColorStop(0, '#060c20');
-				g.addColorStop(0.4, '#152850');
-				g.addColorStop(0.65, '#7a5070');
-				g.addColorStop(0.82, '#ff9a45');
-				g.addColorStop(1, '#4a2818');
+				g.addColorStop(0, '#02040e');
+				g.addColorStop(0.4, '#0a1535');
+				g.addColorStop(0.65, '#c45a30');
+				g.addColorStop(0.82, '#ff7a28');
+				g.addColorStop(1, '#1a0c08');
 				x.fillStyle = g;
 				x.fillRect(0, 0, 4, 256);
 				const t = new THREE.CanvasTexture(c);
 				t.colorSpace = THREE.SRGBColorSpace;
 				return t
 			})();
-			scene.fog = new THREE.FogExp2(0x4a3040, isMobile ? 0.0024 : 0.0020);
+			scene.fog = new THREE.FogExp2(0x1a1020, isMobile ? 0.0032 : 0.0026);
 			const cam = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 900);
-			scene.add(new THREE.HemisphereLight(0xe8f0ff, 0x6a4028, isMobile ? 0.75 : 0.65));
-			const sun = new THREE.DirectionalLight(0xffe4b8, isMobile ? 2.05 : 1.75);
-			sun.position.set(60, 100, 50);
+			// Stadium dusk: deep sky, warm clay, bright floods
+			scene.add(new THREE.HemisphereLight(0x6a80b0, 0x3a2010, isMobile ? 0.45 : 0.4));
+			const sun = new THREE.DirectionalLight(0xffc090, isMobile ? 1.35 : 1.2);
+			sun.position.set(40, 80, 30);
 			sun.castShadow = !isMobile;
 			if (!isMobile) {
 				sun.shadow.mapSize.set(2048, 2048);
@@ -654,13 +666,13 @@
 				sun.shadow.radius = 2
 			}
 			scene.add(sun);
-			const fill = new THREE.DirectionalLight(0x99bbdd, 0.4);
-			fill.position.set(-40, 30, -20);
+			const fill = new THREE.DirectionalLight(0x4466aa, 0.35);
+			fill.position.set(-50, 40, -30);
 			scene.add(fill);
-			const rim = new THREE.DirectionalLight(0xffaa66, isMobile ? 0.35 : 0.25);
-			rim.position.set(-30, 20, -80);
+			const rim = new THREE.DirectionalLight(0xff6622, isMobile ? 0.55 : 0.4);
+			rim.position.set(-20, 25, -60);
 			scene.add(rim);
-			const amb = new THREE.AmbientLight(0x556677, isMobile ? 0.45 : 0.3);
+			const amb = new THREE.AmbientLight(0x2a3040, isMobile ? 0.35 : 0.25);
 			scene.add(amb);
 			// Cheap mobile env map from sky gradient (cars pick up sunset reflections)
 			try {
@@ -1417,18 +1429,31 @@
 						trackG.add(tent)
 					}
 				}
-				// light towers + billboards
+				// Stadium flood towers — bright lamps + soft pools of light
 				for (let i = 0; i < 6; i++) {
 					const q = cl(i * PER / 6 + PER / 12, W / 2 + 24),
-						p = new THREE.Mesh(new THREE.CylinderGeometry(.35, .5, 32, 6), mat(0x777777));
+						p = new THREE.Mesh(new THREE.CylinderGeometry(.35, .5, 32, 6), mat(0x444450));
 					p.position.set(q.x, 16, q.z);
 					trackG.add(p);
-					const l = new THREE.Mesh(new THREE.BoxGeometry(6, 2.5, 1), new THREE.MeshBasicMaterial({
-						color: 0xffffee
-					}));
+					const lampMat = new THREE.MeshBasicMaterial({ color: 0xfff5d0 });
+					const l = new THREE.Mesh(new THREE.BoxGeometry(7, 2.8, 1.2), lampMat);
 					l.position.set(q.x, 32, q.z);
 					l.lookAt(q.x - q.nx * 10, 0, q.z - q.nz * 10);
-					trackG.add(l)
+					trackG.add(l);
+					// Glow halo (sprite-like plane)
+					const glow = new THREE.Mesh(
+						new THREE.PlaneGeometry(14, 10),
+						new THREE.MeshBasicMaterial({ color: 0xffe8a0, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide })
+					);
+					glow.position.set(q.x, 32, q.z);
+					glow.lookAt(q.x - q.nx * 5, 20, q.z - q.nz * 5);
+					trackG.add(glow);
+					// Real light pools (limit count on mobile)
+					if (!isMobile || i % 2 === 0) {
+						const pl = new THREE.PointLight(0xffe0b0, isMobile ? 1.8 : 2.4, 95, 1.6);
+						pl.position.set(q.x - q.nx * 8, 28, q.z - q.nz * 8);
+						trackG.add(pl);
+					}
 				}
 				for (const f of [0.27, 0.77]) {
 					const q = cl(PER * f, W / 2 + 30);
@@ -1522,7 +1547,7 @@
 				return new THREE.CanvasTexture(c)
 			})();
 			const smoke = [];
-			for (let i = 0; i < (isMobile ? 40 : 80); i++) {
+			for (let i = 0; i < (isMobile ? 70 : 120); i++) {
 				const sp = new THREE.Sprite(new THREE.SpriteMaterial({
 					map: smokeTex,
 					transparent: true,
@@ -1540,8 +1565,8 @@
 				p.position.set(x, y, z);
 				p.life = 1;
 				p.visible = true;
-				p.scale.setScalar(1);
-				p.material.opacity = a
+				p.scale.setScalar(1.4 + a * 0.8);
+				p.material.opacity = Math.min(1, a * 1.15)
 			}
 			const COLORS = [
 				[0xffd23f, '1'],
@@ -1923,11 +1948,13 @@
 			document.getElementById('gQuick').onclick = () => {
 				applySetup();
 				raceMode = 'quick';
+				ensureAudio();
 				initRace()
 			};
 			document.getElementById('gFull').onclick = () => {
 				applySetup();
 				raceMode = 'full';
+				ensureAudio();
 				initRace()
 			};
 			document.getElementById('gBack').onclick = () => {
@@ -1949,6 +1976,36 @@
 				menu.style.display = 'flex';
 				state = 'menu'
 			};
+
+			// Simple engine bed — pitch tracks speed (huge "real game" feel, cheap)
+			let audioCtx = null, engineOsc = null, engineGain = null, engineFilter = null;
+			function ensureAudio() {
+				if (audioCtx) return;
+				try {
+					audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+					engineOsc = audioCtx.createOscillator();
+					engineOsc.type = 'sawtooth';
+					engineFilter = audioCtx.createBiquadFilter();
+					engineFilter.type = 'lowpass';
+					engineFilter.frequency.value = 400;
+					engineGain = audioCtx.createGain();
+					engineGain.gain.value = 0;
+					engineOsc.connect(engineFilter);
+					engineFilter.connect(engineGain);
+					engineGain.connect(audioCtx.destination);
+					engineOsc.start();
+				} catch (e) { audioCtx = null; }
+			}
+			function setEngineSound(sp, thr) {
+				if (!audioCtx || !engineOsc) return;
+				if (audioCtx.state === 'suspended') audioCtx.resume();
+				const mph = sp * 2.237;
+				const target = state === 'race' || state === 'count' ? (0.04 + Math.min(0.11, mph / 900) + (thr ? 0.03 : 0)) : 0;
+				engineGain.gain.setTargetAtTime(target, audioCtx.currentTime, 0.08);
+				engineOsc.frequency.setTargetAtTime(55 + mph * 3.2 + (thr ? 25 : 0), audioCtx.currentTime, 0.05);
+				engineFilter.frequency.setTargetAtTime(280 + mph * 8 + (thr ? 120 : 0), audioCtx.currentTime, 0.08);
+			}
+
 			// physics
 			function physics(c, thr, brk, st, dt) {
 				const fx = Math.sin(c.h),
@@ -2303,13 +2360,19 @@
 					if (c.dmg > 0.35 && Math.random() < c.dmg * dt * 25) puff(c.x - Math.sin(c.h) * 1.5, y + 1.2, c.z -
 						Math.cos(c.h) * 1.5, 0.3 + 0.5 * c.dmg);
 					const sp = Math.hypot(c.vx, c.vz);
-					// realistic dirt spray when sliding hard
+					// Heavy rooster tails when sliding — the dirt-race signature
 					const slipA = Math.abs(c.slip || 0);
-					if (sp > 6 && slipA > 0.12 && Math.random() < Math.min(0.85, slipA * 2.2) * dt * 55) {
+					if (sp > 5 && slipA > 0.1 && Math.random() < Math.min(1, slipA * 2.8) * dt * 70) {
 						const rx = Math.cos(c.h),
 							rz = -Math.sin(c.h),
 							side = Math.sign(c.slip || 1);
-						puff(c.x + rx * side * 0.9 - Math.sin(c.h) * 1.2, y + 0.2, c.z + rz * side * 0.9 - Math.cos(c.h) * 1.2, 0.5 + slipA * 0.55);
+						const bx = c.x - Math.sin(c.h) * 1.4, bz = c.z - Math.cos(c.h) * 1.4;
+						puff(bx + rx * side * 1.0, y + 0.25, bz + rz * side * 1.0, 0.55 + slipA * 0.7);
+						if (slipA > 0.25) puff(bx + rx * side * 1.6, y + 0.4, bz + rz * side * 1.6, 0.4 + slipA * 0.4);
+					}
+					// Light dust even when mostly straight at speed
+					else if (sp > 18 && Math.random() < dt * 8) {
+						puff(c.x - Math.sin(c.h) * 1.5, y + 0.15, c.z - Math.cos(c.h) * 1.5, 0.25);
 					}
 					c.mesh.wheels.forEach((w, i) => {
 						w.children[0].rotation.x += sp * dt / 0.5;
@@ -2318,10 +2381,11 @@
 				}
 				for (const p of smoke)
 					if (p.life > 0) {
-						p.life -= dt * 0.7;
-						p.position.y += dt * 1.5;
-						p.scale.setScalar(1 + (1 - p.life) * 4);
-						p.material.opacity = Math.max(0, p.life * 0.6);
+						p.life -= dt * 0.55;
+						p.position.y += dt * 1.2;
+						const base = p.scale.x || 1.5;
+						p.scale.setScalar(base + (1 - p.life) * 5);
+						p.material.opacity = Math.max(0, p.life * 0.75);
 						if (p.life <= 0) p.visible = false
 					}
 				// camera
@@ -2332,11 +2396,13 @@
 				if (camMode === 0) {
 					const vel = Math.hypot(P.vx, P.vz) > 2 ? Math.atan2(P.vx, P.vz) : P.h;
 					const ch = P.h * 0.6 + vel * 0.4 - (Math.abs(vel - P.h) > Math.PI ? 0 : 0);
-					cp.set(P.x - Math.sin(P.h) * 9, py + 4.2, P.z - Math.cos(P.h) * 9);
-					cam.position.lerp(cp, Math.min(1, dt * 10));
-					look.set(P.x + fx * 4, py + 1.2, P.z + fz * 4);
+					const spd = Math.hypot(P.vx, P.vz);
+					// Lower, closer chase — TV dirt-race energy
+					cp.set(P.x - Math.sin(P.h) * (7.2 + spd * 0.04), py + 2.8 + spd * 0.02, P.z - Math.cos(P.h) * (7.2 + spd * 0.04));
+					cam.position.lerp(cp, Math.min(1, dt * 12));
+					look.set(P.x + fx * 5.5, py + 0.9, P.z + fz * 5.5);
 					cam.lookAt(look);
-					cam.fov = 68 + Math.min(10, Math.hypot(P.vx, P.vz) * 0.12);
+					cam.fov = 72 + Math.min(14, spd * 0.18);
 					cam.updateProjectionMatrix();
 					P.mesh.helmet.visible = true
 				} else {
@@ -2364,6 +2430,9 @@
 				db.style.width = dp + '%';
 				db.style.background = dp < 30 ? '#fc3' : dp < 60 ? '#f80' : '#e33';
 				spd.textContent = Math.round(Math.hypot(player.vx, player.vz) * 2.237) + ' mph';
+				const pSp = Math.hypot(player.vx, player.vz);
+				const pThr = (K.KeyW || K.ArrowUp || T.g) ? 1 : 0;
+				setEngineSound(pSp, state === 'race' ? pThr : 0);
 				ren.render(scene, cam)
 			}
 			addEventListener('resize', () => {
