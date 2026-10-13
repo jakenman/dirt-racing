@@ -353,11 +353,25 @@
 		#draftInd.on { opacity: 1; }
 		#draftInd span { display: inline-block; animation: draftPulse 0.45s ease-in-out infinite alternate; }
 		@keyframes draftPulse { from { transform: translateX(0); opacity: 0.7; } to { transform: translateX(4px); opacity: 1; } }
+	
+		#hitFlash {
+			position: fixed; inset: 0; pointer-events: none; z-index: 3;
+			background: radial-gradient(ellipse at center, transparent 50%, rgba(255,40,20,0.35) 100%);
+			opacity: 0; transition: opacity 0.08s;
+		}
+		#hitFlash.on { opacity: 1; }
+		#speedLines {
+			position: fixed; inset: 0; pointer-events: none; z-index: 2;
+			background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.25) 100%);
+			opacity: 0; transition: opacity 0.2s;
+		}
 	</style>
 </head>
 
 <body>
 	<div id="vignette"></div>
+	<div id="speedLines"></div>
+	<div id="hitFlash"></div>
 	<button id="pauseB" style="position:fixed;top:8px;left:8px;font-size:20px;padding:6px 14px;z-index:3">II</button>
 	<div id="hud"></div>
 	<div id="pauseM"
@@ -1698,6 +1712,8 @@
 			];
 			const menu = document.getElementById('menu');
 			let cars = [];
+			let camShake = 0;
+			let hitFlashT = 0;
 
 			function makeCarData(i, col, n) {
 				const isP = i === 0;
@@ -2110,6 +2126,28 @@
 				engineOsc.frequency.setTargetAtTime(55 + mph * 3.2 + (thr ? 25 : 0), audioCtx.currentTime, 0.05);
 				engineFilter.frequency.setTargetAtTime(280 + mph * 8 + (thr ? 120 : 0), audioCtx.currentTime, 0.08);
 			}
+			function playImpact(amt) {
+				if (!audioCtx) return;
+				try {
+					if (audioCtx.state === 'suspended') audioCtx.resume();
+					const t0 = audioCtx.currentTime;
+					const o = audioCtx.createOscillator();
+					const g = audioCtx.createGain();
+					const f = audioCtx.createBiquadFilter();
+					o.type = 'square';
+					f.type = 'lowpass';
+					f.frequency.value = 180 + amt * 200;
+					o.frequency.setValueAtTime(90 + amt * 40, t0);
+					o.frequency.exponentialRampToValueAtTime(40, t0 + 0.12);
+					g.gain.setValueAtTime(Math.min(0.22, 0.08 + amt * 0.4), t0);
+					g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.15);
+					o.connect(f);
+					f.connect(g);
+					g.connect(audioCtx.destination);
+					o.start(t0);
+					o.stop(t0 + 0.16);
+				} catch (e) {}
+			}
 
 
 			function draftFactor(c) {
@@ -2217,6 +2255,14 @@
 				c.hitT = raceT;
 				c.dmg = Math.min(1, c.dmg + amt / S.mass * 1.5);
 				c.pull = Math.max(-1, Math.min(1, c.pull + side * amt * 4));
+				// Game juice: shake + flash + thump when YOU get hit
+				if (c === player) {
+					camShake = Math.min(1.2, camShake + amt * 8);
+					hitFlashT = Math.min(0.35, 0.12 + amt * 2);
+					playImpact(amt);
+					puff(c.x, 0.4, c.z, 0.45);
+					puff(c.x + side * 0.5, 0.5, c.z, 0.3);
+				}
 				for (const p of c.mesh.parts) {
 					p.base = p.base || p.o.rotation.clone();
 					p.o.rotation.set(p.base.x + p.r[0] * c.dmg * side, p.base.y + p.r[1] * c.dmg * side, p.base.z + p.r[
@@ -2544,13 +2590,24 @@
 					const vel = Math.hypot(P.vx, P.vz) > 2 ? Math.atan2(P.vx, P.vz) : P.h;
 					const ch = P.h * 0.6 + vel * 0.4 - (Math.abs(vel - P.h) > Math.PI ? 0 : 0);
 					const spd = Math.hypot(P.vx, P.vz);
-					// Lower, closer chase — TV dirt-race energy
-					cp.set(P.x - Math.sin(P.h) * (7.2 + spd * 0.04), py + 2.8 + spd * 0.02, P.z - Math.cos(P.h) * (7.2 + spd * 0.04));
-					cam.position.lerp(cp, Math.min(1, dt * 12));
-					look.set(P.x + fx * 5.5, py + 0.9, P.z + fz * 5.5);
+					// Lower chase + bank into the turn + impact shake
+					const bank = Math.max(-0.12, Math.min(0.12, (P.av || 0) * 0.08 + (P.steer || 0) * 0.06));
+					const sh = camShake * camShake;
+					const sx = (Math.random() - 0.5) * sh * 0.55;
+					const sy = (Math.random() - 0.5) * sh * 0.4;
+					const sz = (Math.random() - 0.5) * sh * 0.55;
+					cp.set(
+						P.x - Math.sin(P.h) * (7.0 + spd * 0.04) + sx,
+						py + 2.6 + spd * 0.02 + sy,
+						P.z - Math.cos(P.h) * (7.0 + spd * 0.04) + sz
+					);
+					cam.position.lerp(cp, Math.min(1, dt * 14));
+					look.set(P.x + fx * 5.5, py + 0.85, P.z + fz * 5.5);
 					cam.lookAt(look);
-					cam.fov = 72 + Math.min(14, spd * 0.18);
+					cam.rotation.z = bank * 0.65;
+					cam.fov = 72 + Math.min(16, spd * 0.2) + sh * 3;
 					cam.updateProjectionMatrix();
+					camShake = Math.max(0, camShake - dt * 2.8);
 					P.mesh.helmet.visible = true
 				} else {
 					cam.position.set(P.x - fx * (cls === 'truck' ? 0.1 : 0.2), py + (cls === 'truck' ? 1.75 : 1.55), P.z -
@@ -2587,6 +2644,17 @@
 						dEl.classList.add('on');
 						dEl.innerHTML = '<span>////</span> DRAFT';
 					} else dEl.classList.remove('on');
+				}
+				// Speed pressure vignette + hit flash (game feel, not a video)
+				const sl = document.getElementById('speedLines');
+				if (sl) sl.style.opacity = state === 'race' ? String(Math.min(0.85, Math.hypot(player.vx, player.vz) / 45)) : '0';
+				if (hitFlashT > 0) {
+					hitFlashT -= dt;
+					const hf = document.getElementById('hitFlash');
+					if (hf) {
+						if (hitFlashT > 0) hf.classList.add('on');
+						else hf.classList.remove('on');
+					}
 				}
 				ren.render(scene, cam)
 			}
