@@ -886,133 +886,134 @@
 					g.add(o);
 					return o
 				};
-				// nose cone (lathe-like taper)
-				const nose = new THREE.CylinderGeometry(0.22, 0.4, 1.4, SEG(16));
+				const bodyDark = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.7, metalness: 0.15 });
+				const alum = new THREE.MeshStandardMaterial({ color: 0xb0b4b8, roughness: 0.35, metalness: 0.7 });
+				const blackPaint = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.55, metalness: 0.2 });
+				// --- chassis / belly ---
+				add(new THREE.BoxGeometry(0.9, 0.12, 3.4), bodyDark, 0, 0.42, 0);
+				// nose cone — multi-section taper
+				const nose = new THREE.CylinderGeometry(0.18, 0.42, 1.55, SEG(18));
 				nose.rotateX(Math.PI / 2);
-				nose.scale(1.15, 0.75, 1);
-				const noseM = add(nose, m, 0, 0.72, -1.75);
-				add(rbox(0.85, 0.55, 1.6, 0.18), m, 0, 0.78, -0.5); // cowl
-				add(rbox(0.95, 0.55, 1.0, 0.2), m, 0, 0.95, 0.95); // tail tank
-				// side panels with decals
-				const dm = new THREE.MeshLambertMaterial({
-					map: decal(color, num, brand)
-				});
+				nose.scale(1.2, 0.72, 1);
+				const noseM = add(nose, m, 0, 0.7, -1.85);
+				add(new THREE.SphereGeometry(0.2, SEG(10), SEG(8)), m, 0, 0.7, -2.55);
+				// cowl + hood blister
+				add(rbox(0.88, 0.52, 1.55, 0.14), m, 0, 0.78, -0.45);
+				add(rbox(0.55, 0.18, 0.7, 0.08), m, 0, 1.08, -0.7);
+				// tail / fuel cell area
+				add(rbox(1.0, 0.58, 1.15, 0.16), m, 0, 0.92, 1.0);
+				add(new THREE.BoxGeometry(0.85, 0.35, 0.5), blackPaint, 0, 0.85, 1.55);
+				// side panels + decals
+				const dm = new THREE.MeshStandardMaterial({ map: decal(color, num, brand), roughness: 0.55, metalness: 0.1 });
 				for (const s of [-1, 1]) {
-					const p = add(new THREE.PlaneGeometry(1.5, 0.5), dm, s * 0.44, 0.8, -0.5);
-					p.rotation.y = s * Math.PI / 2
+					const p = add(new THREE.PlaneGeometry(1.55, 0.55), dm, s * 0.46, 0.82, -0.4);
+					p.rotation.y = s * Math.PI / 2;
+					// rocker panel stripe
+					const rock = add(new THREE.BoxGeometry(0.06, 0.12, 2.2), blackPaint, s * 0.48, 0.5, 0);
 				}
-				// engine + headers
-				add(new THREE.BoxGeometry(0.55, 0.4, 0.6), mat(0x555555), 0, 0.92, -1.15);
-				add(new THREE.BoxGeometry(0.4, 0.12, 0.5), chrome, 0, 1.16, -1.15);
-				for (const s of [-1, 1])
+				// --- engine bay detail ---
+				add(new THREE.BoxGeometry(0.58, 0.42, 0.65), mat(0x3a3a3a), 0, 0.95, -1.15);
+				add(new THREE.BoxGeometry(0.42, 0.1, 0.55), chrome, 0, 1.2, -1.15);
+				// valve covers
+				for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.12, 0.08, 0.5), alum, s * 0.22, 1.18, -1.15);
+				// intake stack
+				add(new THREE.CylinderGeometry(0.1, 0.12, 0.22, SEG(10)), blackPaint, 0, 1.35, -1.15);
+				// headers 4-into-1 each side
+				for (const s of [-1, 1]) {
 					for (let i = 0; i < 4; i++) {
-						const z = -1.35 + i * 0.13;
-						tube(g, [s * 0.28, 0.92, z], [s * 0.5, 0.7, z + 0.15], 0.035, chrome);
-						if (i === 3) tube(g, [s * 0.5, 0.7, z + 0.15], [s * 0.55, 0.65, 0.6], 0.05, chrome)
+						const z = -1.4 + i * 0.12;
+						tube(g, [s * 0.3, 0.95, z], [s * 0.55, 0.62, z + 0.12], 0.032, chrome);
 					}
-				// cage
+					tube(g, [s * 0.55, 0.62, -1.05], [s * 0.58, 0.55, 0.5], 0.055, chrome);
+					tube(g, [s * 0.58, 0.55, 0.5], [s * 0.5, 0.5, 1.1], 0.06, chrome);
+				}
+				// --- full roll cage ---
 				const cg = [
-					[-.45, .7, -.1],
-					[.45, .7, -.1],
-					[-.4, 1.75, 0],
-					[.4, 1.75, 0],
-					[-.45, .7, .55],
-					[.45, .7, .55],
-					[-.4, 1.75, .45],
-					[.4, 1.75, .45]
+					[-.48, .65, -.15], [.48, .65, -.15], [-.42, 1.82, .05], [.42, 1.82, .05],
+					[-.48, .65, .6], [.48, .65, .6], [-.42, 1.82, .5], [.42, 1.82, .5],
+					[-.35, 1.82, -.4], [.35, 1.82, -.4]
 				];
-				for (const [a, b] of [
-						[0, 2],
-						[1, 3],
-						[2, 3],
-						[4, 6],
-						[5, 7],
-						[6, 7],
-						[2, 6],
-						[3, 7],
-						[0, 4],
-						[1, 5]
-					]) tube(g, cg[a], cg[b], 0.035);
-				// torsion bars, nerf bars, push bar, front axle
-				tube(g, [-0.7, 0.55, -1.6], [0.7, 0.55, -1.6], 0.04, chrome);
-				tube(g, [-0.75, 0.6, 1.2], [0.75, 0.6, 1.2], 0.05, chrome);
-				tube(g, [-0.6, 0.55, -1.9], [0.6, 0.55, -1.9], 0.035);
-				tube(g, [-0.6, 0.75, 1.0], [0.6, 0.75, 1.0], 0.035);
+				const cagePairs = [[0,2],[1,3],[2,3],[4,6],[5,7],[6,7],[2,6],[3,7],[0,4],[1,5],[2,8],[3,9],[8,9],[8,0],[9,1]];
+				for (const [a, b] of cagePairs) tube(g, cg[a], cg[b], 0.038, tubeM);
+				// halo / top bar
+				tube(g, [-0.35, 1.9, 0.2], [0.35, 1.9, 0.2], 0.04, tubeM);
+				// --- suspension / nerf / axles ---
+				tube(g, [-0.75, 0.52, -1.65], [0.75, 0.52, -1.65], 0.045, chrome); // front axle
+				tube(g, [-0.8, 0.58, 1.15], [0.8, 0.58, 1.15], 0.05, chrome); // rear
+				tube(g, [-0.55, 0.5, -2.05], [0.55, 0.5, -2.05], 0.035, chrome); // push bar
+				// nerf bars
 				for (const s of [-1, 1]) {
-					tube(g, [s * 0.45, 0.55, -0.9], [s * 1.05, 0.5, -0.6], 0.035, chrome);
-					tube(g, [s * 1.05, 0.5, -0.6], [s * 1.05, 0.5, 0.4], 0.035, chrome);
-					tube(g, [s * 1.05, 0.5, 0.4], [s * 0.5, 0.55, 0.6], 0.035, chrome)
+					tube(g, [s * 0.48, 0.52, -0.95], [s * 1.08, 0.48, -0.55], 0.032, chrome);
+					tube(g, [s * 1.08, 0.48, -0.55], [s * 1.08, 0.48, 0.45], 0.032, chrome);
+					tube(g, [s * 1.08, 0.48, 0.45], [s * 0.52, 0.52, 0.7], 0.032, chrome);
+					// radius rods
+					tube(g, [s * 0.4, 0.55, 0.9], [s * 1.05, 0.55, 1.15], 0.025, alum);
+					tube(g, [s * 0.4, 0.55, -1.4], [s * 0.9, 0.5, -1.6], 0.025, alum);
 				}
-				tube(g, [-0.5, 0.5, 1.75], [0.5, 0.5, 1.75], 0.045, chrome);
-				tube(g, [-0.4, 0.5, 1.75], [-0.3, 0.7, 1.25], 0.035, chrome);
-				tube(g, [0.4, 0.5, 1.75], [0.3, 0.7, 1.25], 0.035, chrome);
-				const helmet = driver(g, 0, 1.05, 0.2, 0xffffff);
-				// top wing with boards
+				// rear bumper / fuel cell protect
+				tube(g, [-0.55, 0.48, 1.85], [0.55, 0.48, 1.85], 0.05, chrome);
+				tube(g, [-0.45, 0.48, 1.85], [-0.35, 0.72, 1.35], 0.032, chrome);
+				tube(g, [0.45, 0.48, 1.85], [0.35, 0.72, 1.35], 0.032, chrome);
+				// driver
+				const helmet = driver(g, 0, 1.08, 0.15, 0xffffff);
+				// seat back hint
+				add(new THREE.BoxGeometry(0.45, 0.5, 0.12), blackPaint, 0, 1.15, 0.45);
+				// --- top wing (tall sprint wing) ---
 				const wing = new THREE.Group();
-				wing.position.set(0, 2.05, 0.3);
+				wing.position.set(0, 2.15, 0.25);
 				g.add(wing);
-				const wp = new THREE.Mesh(rbox(1.7, 0.06, 1.9, 0.03), m);
+				const wp = new THREE.Mesh(rbox(1.85, 0.05, 2.05, 0.025), m);
 				wing.add(wp);
-				const wd = new THREE.MeshLambertMaterial({
-					map: decal(color, num, brand),
-					side: THREE.DoubleSide
-				});
+				const wd = new THREE.MeshStandardMaterial({ map: decal(color, num, brand), side: THREE.DoubleSide, roughness: 0.5, metalness: 0.1 });
 				for (const s of [-1, 1]) {
-					const b = new THREE.Mesh(new THREE.PlaneGeometry(2.05, 0.8), wd);
-					b.position.set(s * 0.87, 0.1, 0);
+					const b = new THREE.Mesh(new THREE.PlaneGeometry(2.15, 0.95), wd);
+					b.position.set(s * 0.92, 0.12, 0);
 					b.rotation.y = s * Math.PI / 2;
-					wing.add(b)
+					wing.add(b);
+					// sideboard ribs
+					wing.add(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.9, 0.04), blackPaint).translateX(s * 0.92).translateY(0.12));
 				}
-				const wdec = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.6), new THREE.MeshLambertMaterial({
-					map: decal(color, num, brand)
-				}));
+				const wdec = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.7), new THREE.MeshStandardMaterial({ map: decal(color, num, brand), roughness: 0.5 }));
 				wdec.rotation.x = -Math.PI / 2;
-				wdec.position.y = 0.04;
+				wdec.position.y = 0.035;
 				wing.add(wdec);
-				wing.rotation.x = -0.12;
-				tube(g, [-0.45, 1.75, 0.4], [-0.5, 2.0, 0.4], 0.03);
-				tube(g, [0.45, 1.75, 0.4], [0.5, 2.0, 0.4], 0.03);
-				// nose wing
+				wing.rotation.x = -0.14;
+				// wing posts
+				tube(g, [-0.4, 1.82, 0.35], [-0.55, 2.12, 0.35], 0.028, tubeM);
+				tube(g, [0.4, 1.82, 0.35], [0.55, 2.12, 0.35], 0.028, tubeM);
+				tube(g, [-0.4, 1.82, 0.1], [-0.5, 2.12, 0.05], 0.025, tubeM);
+				tube(g, [0.4, 1.82, 0.1], [0.5, 2.12, 0.05], 0.025, tubeM);
+				// --- nose wing ---
 				const nw = new THREE.Group();
-				nw.position.set(0, 0.95, -2.35);
+				nw.position.set(0, 0.92, -2.4);
 				g.add(nw);
-				nw.add(new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.04, 0.55), m));
+				nw.add(new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.04, 0.6), m));
 				for (const s of [-1, 1]) {
-					const b = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.3), wd);
-					b.position.x = s * 0.6;
+					const b = new THREE.Mesh(new THREE.PlaneGeometry(0.65, 0.32), wd);
+					b.position.set(s * 0.68, 0.05, 0);
 					b.rotation.y = Math.PI / 2;
-					nw.add(b)
+					nw.add(b);
 				}
+				// front wing stays
+				tube(g, [-0.3, 0.75, -2.0], [-0.5, 0.92, -2.35], 0.02, tubeM);
+				tube(g, [0.3, 0.75, -2.0], [0.5, 0.92, -2.35], 0.02, tubeM);
+				// wheels — staggered dirt look
 				const wheels = [];
 				for (const [x, z, r, w] of [
-						[-0.95, -1.6, 0.42, 0.33],
-						[0.95, -1.6, 0.42, 0.33],
-						[-1.12, 1.2, 0.62, 0.7],
-						[1.25, 1.2, 0.65, 0.85]
+						[-0.95, -1.65, 0.4, 0.32],
+						[0.95, -1.65, 0.4, 0.32],
+						[-1.15, 1.15, 0.64, 0.72],
+						[1.28, 1.15, 0.66, 0.88]
 					]) {
 					const p = new THREE.Group();
 					p.position.set(x, r, z);
 					g.add(p);
 					p.add(wheel(r, w, color));
-					wheels.push(p)
+					wheels.push(p);
 				}
 				enableShadows(g);
 				scene.add(g);
-				return {
-					g,
-					wheels,
-					helmet,
-					parts: [{
-						o: wing,
-						r: [0.3, 0.2, 0.4]
-					}, {
-						o: nw,
-						r: [0.2, 0.4, 0.3]
-					}, {
-						o: noseM,
-						r: [0, 0.15, 0.1]
-					}]
-				}
+				return { g, wheels, helmet, parts: [{ o: wing, r: [0.3, 0.2, 0.4] }, { o: nw, r: [0.2, 0.4, 0.3] }, { o: noseM, r: [0, 0.15, 0.1] }] };
 			}
 			const truckBody = (() => {
 				const s = new THREE.Shape(),
@@ -1053,99 +1054,95 @@
 					g.add(o);
 					return o
 				};
+				const blackPaint = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.6, metalness: 0.15 });
+				const alum = new THREE.MeshStandardMaterial({ color: 0xa8acb0, roughness: 0.4, metalness: 0.65 });
 				add(truckBody, m, 0, 0, 0);
-				add(new THREE.BoxGeometry(1.75, 0.2, 4.6), dark, 0, 0.5, 0);
-				const bedIn = add(new THREE.BoxGeometry(1.6, 0.05, 1.6), dark, 0, 1.32, 1.55);
-				const glass = mat(0x1e2a38);
-				const ws = add(new THREE.PlaneGeometry(1.7, 0.8), glass, 0, 1.6, -0.73);
-				ws.rotation.x = -0.9;
+				add(new THREE.BoxGeometry(1.75, 0.18, 4.6), dark, 0, 0.48, 0);
+				// bed
+				add(new THREE.BoxGeometry(1.65, 0.08, 1.7), blackPaint, 0, 1.3, 1.55);
+				for (const s of [-1, 1]) {
+					add(new THREE.BoxGeometry(0.08, 0.35, 1.65), m, s * 0.82, 1.45, 1.55);
+				}
+				add(new THREE.BoxGeometry(1.65, 0.3, 0.08), m, 0, 1.42, 2.35);
+				// glass
+				const glass = new THREE.MeshStandardMaterial({ color: 0x1a2838, roughness: 0.15, metalness: 0.4, transparent: true, opacity: 0.75 });
+				const ws = add(new THREE.PlaneGeometry(1.65, 0.75), glass, 0, 1.62, -0.7);
+				ws.rotation.x = -0.85;
 				ws.rotation.y = Math.PI;
 				for (const s of [-1, 1]) {
-					const sw = add(new THREE.PlaneGeometry(0.9, 0.5), glass, s * 0.97, 1.6, -0.05);
+					const sw = add(new THREE.PlaneGeometry(0.95, 0.48), glass, s * 0.96, 1.58, 0);
 					sw.rotation.y = s * Math.PI / 2;
-					const d = add(new THREE.PlaneGeometry(1.5, 0.75), new THREE.MeshLambertMaterial({
-						map: decal(color, num, brand)
-					}), s * 0.98, 0.92, -0.1);
-					d.rotation.y = s * Math.PI / 2
+					const d = add(new THREE.PlaneGeometry(1.55, 0.8), new THREE.MeshStandardMaterial({ map: decal(color, num, brand), roughness: 0.5 }), s * 0.97, 0.95, -0.05);
+					d.rotation.y = s * Math.PI / 2;
 				}
-				const grille = add(new THREE.PlaneGeometry(1.2, 0.4), new THREE.MeshLambertMaterial({
+				// grille detail
+				const grille = add(new THREE.PlaneGeometry(1.25, 0.45), new THREE.MeshStandardMaterial({
 					map: cvTex(128, 48, (x, w, h) => {
-						x.fillStyle = '#222';
+						x.fillStyle = '#1a1a1a';
 						x.fillRect(0, 0, w, h);
-						x.strokeStyle = '#999';
-						x.lineWidth = 3;
-						for (let i = 6; i < w; i += 10) {
+						x.strokeStyle = '#888';
+						x.lineWidth = 2;
+						for (let i = 5; i < w; i += 8) {
 							x.beginPath();
-							x.moveTo(i, 4);
-							x.lineTo(i, h - 4);
-							x.stroke()
+							x.moveTo(i, 3);
+							x.lineTo(i, h - 3);
+							x.stroke();
 						}
-					})
-				}), 0, 0.85, -2.58);
+						x.strokeStyle = '#ccc';
+						x.lineWidth = 3;
+						x.strokeRect(2, 2, w - 4, h - 4);
+					}),
+					roughness: 0.4,
+					metalness: 0.5
+				}), 0, 0.88, -2.58);
 				grille.rotation.y = Math.PI;
+				// headlights + signals
 				for (const s of [-1, 1]) {
-					const hl = add(new THREE.CircleGeometry(0.13, SEG(12)), new THREE.MeshBasicMaterial({
-						color: 0xfff6cc
-					}), s * 0.72, 0.87, -2.59);
+					const hl = add(new THREE.CircleGeometry(0.14, SEG(12)), new THREE.MeshBasicMaterial({ color: 0xfff8e0 }), s * 0.7, 0.9, -2.6);
 					hl.rotation.y = Math.PI;
-					const tl = add(new THREE.PlaneGeometry(0.2, 0.25), new THREE.MeshBasicMaterial({
-						color: 0xff2020
-					}), s * 0.75, 1.0, 2.6)
+					add(new THREE.CircleGeometry(0.06, SEG(8)), new THREE.MeshBasicMaterial({ color: 0xff8800 }), s * 0.95, 0.75, -2.58).rotation.y = Math.PI;
+					add(new THREE.PlaneGeometry(0.22, 0.28), new THREE.MeshBasicMaterial({ color: 0xff1010 }), s * 0.78, 1.05, 2.62);
 				}
-				const bumper = add(rbox(1.95, 0.22, 0.25, 0.06), chrome, 0, 0.6, -2.6);
-				add(rbox(1.95, 0.2, 0.2, 0.05), chrome, 0, 0.6, 2.62);
-				const hood = add(new THREE.PlaneGeometry(1.0, 0.6), new THREE.MeshLambertMaterial({
-					map: decal(color, num, brand)
-				}), 0, 1.24, -1.6);
-				hood.rotation.x = -Math.PI / 2 - 0.06;
-				const roof = add(new THREE.PlaneGeometry(0.9, 0.6), new THREE.MeshLambertMaterial({
-					map: decal(color, num, brand)
-				}), 0, 2.08, -0.05);
+				// bumpers
+				const bumper = add(rbox(2.0, 0.24, 0.28, 0.06), chrome, 0, 0.58, -2.62);
+				add(rbox(2.0, 0.22, 0.24, 0.05), chrome, 0, 0.58, 2.65);
+				// hood + roof decals
+				const hood = add(new THREE.PlaneGeometry(1.05, 0.65), new THREE.MeshStandardMaterial({ map: decal(color, num, brand), roughness: 0.5 }), 0, 1.26, -1.55);
+				hood.rotation.x = -Math.PI / 2 - 0.05;
+				const roof = add(new THREE.PlaneGeometry(0.95, 0.65), new THREE.MeshStandardMaterial({ map: decal(color, num, brand), roughness: 0.5 }), 0, 2.1, 0);
 				roof.rotation.x = -Math.PI / 2;
+				// bed cage / light bar
+				for (const s of [-1, 1]) tube(g, [s * 0.78, 1.35, 0.9], [s * 0.78, 2.2, 0.9], 0.045, tubeM);
+				tube(g, [-0.78, 2.2, 0.9], [0.78, 2.2, 0.9], 0.045, tubeM);
+				tube(g, [-0.7, 2.18, 0.9], [-0.55, 1.95, 0.15], 0.035, tubeM);
+				tube(g, [0.7, 2.18, 0.9], [0.55, 1.95, 0.15], 0.035, tubeM);
+				// spoiler
+				const spoiler = add(new THREE.BoxGeometry(1.95, 0.5, 0.06), m, 0, 1.65, 2.48);
+				spoiler.rotation.x = -0.55;
+				add(new THREE.BoxGeometry(0.08, 0.35, 0.25), m, -0.9, 1.45, 2.35);
+				add(new THREE.BoxGeometry(0.08, 0.35, 0.25), m, 0.9, 1.45, 2.35);
+				// mirrors
 				for (const s of [-1, 1]) {
-					tube(g, [s * 0.75, 1.33, 0.85], [s * 0.75, 2.15, 0.85], 0.05);
+					add(new THREE.BoxGeometry(0.08, 0.08, 0.18), blackPaint, s * 1.0, 1.55, -0.55);
+					add(new THREE.BoxGeometry(0.2, 0.12, 0.04), alum, s * 1.12, 1.55, -0.55);
 				}
-				tube(g, [-0.75, 2.15, 0.85], [0.75, 2.15, 0.85], 0.05);
-				tube(g, [-0.7, 2.12, 0.85], [-0.6, 1.95, 0.1], 0.04);
-				tube(g, [0.7, 2.12, 0.85], [0.6, 1.95, 0.1], 0.04);
-				const spoiler = add(new THREE.BoxGeometry(1.9, 0.45, 0.05), m, 0, 1.6, 2.45);
-				spoiler.rotation.x = -0.5;
-				const helmet = driver(g, 0.38, 1.25, -0.15, 0xffffff);
+				// exhaust tips under bed
+				for (const s of [-1, 1]) add(new THREE.CylinderGeometry(0.06, 0.07, 0.3, SEG(8)), chrome, s * 0.55, 0.45, 2.4).rotation.x = Math.PI / 2;
+				const helmet = driver(g, 0.35, 1.28, -0.12, 0xffffff);
 				const wheels = [];
-				for (const [x, z] of [
-						[-1.0, -1.55],
-						[1.0, -1.55],
-						[-1.0, 1.55],
-						[1.0, 1.55]
-					]) {
+				for (const [x, z] of [[-1.02, -1.55], [1.02, -1.55], [-1.02, 1.55], [1.02, 1.55]]) {
 					const p = new THREE.Group();
-					p.position.set(x, 0.5, z);
+					p.position.set(x, 0.52, z);
 					g.add(p);
-					p.add(wheel(0.5, 0.42, 0xaaaaaa));
-					wheels.push(p)
+					p.add(wheel(0.52, 0.44, 0xaaaaaa));
+					wheels.push(p);
 				}
 				enableShadows(g);
 				scene.add(g);
-				return {
-					g,
-					wheels,
-					helmet,
-					parts: [{
-						o: hood,
-						r: [0.25, 0.1, 0.15]
-					}, {
-						o: spoiler,
-						r: [0.6, 0, 0.3]
-					}, {
-						o: bumper,
-						r: [0.2, 0.25, 0.1]
-					}, {
-						o: roof,
-						r: [0.1, 0, 0.1]
-					}]
-				}
+				return { g, wheels, helmet, parts: [{ o: hood, r: [0.25, 0.1, 0.15] }, { o: spoiler, r: [0.6, 0, 0.3] }, { o: bumper, r: [0.2, 0.25, 0.1] }, { o: roof, r: [0.1, 0, 0.1] }] };
 			}
 
+			
 			// track mesh
 			const dirtTex = cvTex(512, 1024, (x, w, h) => {
 				x.fillStyle = '#5c3a22';
@@ -1547,7 +1544,7 @@
 				return new THREE.CanvasTexture(c)
 			})();
 			const smoke = [];
-			for (let i = 0; i < (isMobile ? 70 : 120); i++) {
+			for (let i = 0; i < (isMobile ? 36 : 60); i++) {
 				const sp = new THREE.Sprite(new THREE.SpriteMaterial({
 					map: smokeTex,
 					transparent: true,
@@ -1563,10 +1560,10 @@
 			function puff(x, y, z, a) {
 				const p = smoke[smokeI++ % smoke.length];
 				p.position.set(x, y, z);
-				p.life = 1;
+				p.life = 0.85;
 				p.visible = true;
-				p.scale.setScalar(1.4 + a * 0.8);
-				p.material.opacity = Math.min(1, a * 1.15)
+				p.scale.setScalar(0.9 + a * 0.5);
+				p.material.opacity = Math.min(0.7, a)
 			}
 			const COLORS = [
 				[0xffd23f, '1'],
@@ -2360,19 +2357,15 @@
 					if (c.dmg > 0.35 && Math.random() < c.dmg * dt * 25) puff(c.x - Math.sin(c.h) * 1.5, y + 1.2, c.z -
 						Math.cos(c.h) * 1.5, 0.3 + 0.5 * c.dmg);
 					const sp = Math.hypot(c.vx, c.vz);
-					// Heavy rooster tails when sliding — the dirt-race signature
+					// Realistic roost: only on real slip, amount depends on track grit (bank/width)
 					const slipA = Math.abs(c.slip || 0);
-					if (sp > 5 && slipA > 0.1 && Math.random() < Math.min(1, slipA * 2.8) * dt * 70) {
+					const grit = 0.25 + BANK * 1.1 + Math.max(0, W - 16) * 0.025; // sticky tracks = less dust
+					if (sp > 10 && slipA > 0.22 && Math.random() < slipA * grit * dt * 28) {
 						const rx = Math.cos(c.h),
 							rz = -Math.sin(c.h),
 							side = Math.sign(c.slip || 1);
-						const bx = c.x - Math.sin(c.h) * 1.4, bz = c.z - Math.cos(c.h) * 1.4;
-						puff(bx + rx * side * 1.0, y + 0.25, bz + rz * side * 1.0, 0.55 + slipA * 0.7);
-						if (slipA > 0.25) puff(bx + rx * side * 1.6, y + 0.4, bz + rz * side * 1.6, 0.4 + slipA * 0.4);
-					}
-					// Light dust even when mostly straight at speed
-					else if (sp > 18 && Math.random() < dt * 8) {
-						puff(c.x - Math.sin(c.h) * 1.5, y + 0.15, c.z - Math.cos(c.h) * 1.5, 0.25);
+						const bx = c.x - Math.sin(c.h) * 1.3, bz = c.z - Math.cos(c.h) * 1.3;
+						puff(bx + rx * side * 0.85, y + 0.18, bz + rz * side * 0.85, 0.28 + slipA * 0.35 * grit);
 					}
 					c.mesh.wheels.forEach((w, i) => {
 						w.children[0].rotation.x += sp * dt / 0.5;
@@ -2381,11 +2374,11 @@
 				}
 				for (const p of smoke)
 					if (p.life > 0) {
-						p.life -= dt * 0.55;
-						p.position.y += dt * 1.2;
-						const base = p.scale.x || 1.5;
-						p.scale.setScalar(base + (1 - p.life) * 5);
-						p.material.opacity = Math.max(0, p.life * 0.75);
+						p.life -= dt * 0.9;
+						p.position.y += dt * 0.9;
+						const base = p.scale.x || 1;
+						p.scale.setScalar(base + (1 - p.life) * 2.2);
+						p.material.opacity = Math.max(0, p.life * 0.5);
 						if (p.life <= 0) p.visible = false
 					}
 				// camera
