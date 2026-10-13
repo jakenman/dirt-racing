@@ -2590,22 +2590,24 @@
 					const vel = Math.hypot(P.vx, P.vz) > 2 ? Math.atan2(P.vx, P.vz) : P.h;
 					const ch = P.h * 0.6 + vel * 0.4 - (Math.abs(vel - P.h) > Math.PI ? 0 : 0);
 					const spd = Math.hypot(P.vx, P.vz);
-					// Lower chase + bank into the turn + impact shake
-					const bank = Math.max(-0.12, Math.min(0.12, (P.av || 0) * 0.08 + (P.steer || 0) * 0.06));
-					const sh = camShake * camShake;
-					const sx = (Math.random() - 0.5) * sh * 0.55;
-					const sy = (Math.random() - 0.5) * sh * 0.4;
-					const sz = (Math.random() - 0.5) * sh * 0.55;
+					// Chase + impact shake (no Euler roll — that was flipping the camera ~150°)
+					const sh = Math.min(1, camShake);
+					const sx = (Math.random() - 0.5) * sh * 0.45;
+					const sy = (Math.random() - 0.5) * sh * 0.3;
+					const sz = (Math.random() - 0.5) * sh * 0.45;
+					// Mild lateral lean via position only (safe)
+					const lean = Math.max(-1, Math.min(1, (P.steer || 0))) * 0.35;
+					const rx = Math.cos(P.h), rz = -Math.sin(P.h);
 					cp.set(
-						P.x - Math.sin(P.h) * (7.0 + spd * 0.04) + sx,
+						P.x - Math.sin(P.h) * (7.0 + spd * 0.04) + rx * lean + sx,
 						py + 2.6 + spd * 0.02 + sy,
-						P.z - Math.cos(P.h) * (7.0 + spd * 0.04) + sz
+						P.z - Math.cos(P.h) * (7.0 + spd * 0.04) + rz * lean + sz
 					);
 					cam.position.lerp(cp, Math.min(1, dt * 14));
 					look.set(P.x + fx * 5.5, py + 0.85, P.z + fz * 5.5);
+					cam.up.set(0, 1, 0); // lock world-up so camera never inverts
 					cam.lookAt(look);
-					cam.rotation.z = bank * 0.65;
-					cam.fov = 72 + Math.min(16, spd * 0.2) + sh * 3;
+					cam.fov = 72 + Math.min(16, spd * 0.2) + sh * 2;
 					cam.updateProjectionMatrix();
 					camShake = Math.max(0, camShake - dt * 2.8);
 					P.mesh.helmet.visible = true
