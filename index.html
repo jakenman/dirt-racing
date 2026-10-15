@@ -444,7 +444,7 @@
 		<button id="gBack" style="width:180px;background:#555;color:#fff;margin-top:4px">Back</button>
 	</div>
 	<div id="editor">
-		<div id="ehint">Drag points to shape · tap empty space to add a point · select a point + Delete to remove</div>
+		<div id="ehint">Drag points to shape · Start line slider moves green START on map · Race from editor to apply</div>
 		<canvas id="ecv"></canvas>
 		<div id="etb">
 			<select id="epre"></select><button id="eDel">Delete pt</button>
@@ -1528,16 +1528,17 @@
 				const sLine = getStartS();
 				// Stripe follows surface: sample across width at bank height
 				{
-					const segs = 10;
+					const segs = 14;
 					const pos = [],
 						idxArr = [],
 						uv = [];
+					// Full racing surface wall-to-wall
 					for (let i = 0; i <= segs; i++) {
 						const t = i / segs;
-						const lat = -W / 2 + 0.4 + t * (W - 0.8);
-						const y = hAt(R + lat) + 0.05;
-						const a = cl(sLine - 0.7, lat),
-							b = cl(sLine + 0.7, lat);
+						const lat = -W / 2 + 0.15 + t * (W - 0.3);
+						const y = hAt(R + lat) + 0.06;
+						const a = cl(sLine - 0.85, lat),
+							b = cl(sLine + 0.85, lat);
 						pos.push(a.x, y, a.z, b.x, y, b.z);
 						uv.push(0, t, 1, t);
 						if (i < segs) {
@@ -1896,6 +1897,7 @@
 					c.steer = 0;
 					c.s = s;
 					c.prevS = s;
+					c.prevRel = 0;
 					c.lap = 0;
 					c.half = true;
 					c.done = false;
@@ -2312,8 +2314,14 @@
 				// weight bias + damage pull: bias>0 = heavy right → wants to rotate left (typical oval left bias is negative)
 				const bias = c.bias || 0;
 				if (sp > 3) st = Math.max(-1, Math.min(1, st + c.pull * c.dmg * 0.35 - bias * 0.22));
-				// longitudinal
-				let a = thr * S.pow * (1 - Math.max(0, vf) / MAXV) - brk * (vf > 0 ? 30 : 12) - vf * 0.04 - (thr ? 0 :
+				// longitudinal — launch matched to AI (~3.7s to 60 for everyone)
+				const sp60 = 60 / 2.237;
+				let powUse = S.pow;
+				if (thr && vf >= 0 && vf < sp60) {
+					// Stronger off the line so player isn't left by AI
+					powUse = Math.max(S.pow, sp60 / 3.5 + vf * 0.15);
+				}
+				let a = thr * powUse * (1 - Math.max(0, vf) / MAXV) - brk * (vf > 0 ? 30 : 12) - vf * 0.04 - (thr ? 0 :
 					vf * 0.25);
 				vf += a * dt;
 				if (brk && vf < 0) vf = Math.max(vf, -8);
@@ -2481,11 +2489,15 @@
 						tgt *= 0.92 + 0.08 * (ahead / 4);
 					}
 				}
-				// Launch: sprint ~3.2s to pace, truck ~5s (real-world-ish)
-				if (c.aiSp == null) c.aiSp = tgt * 0.05;
-				const wantSp = Math.max(4, tgt * (1 - brake * 0.35));
-				const launchK = cls === 'truck' ? 0.65 : 1.0;
-				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * launchK);
+				// Even launch for everyone: ~3.7s to 60 mph, then ease to race pace
+				const sp60 = 60 / 2.237;
+				if (c.aiSp == null) c.aiSp = 2;
+				const wantSp = Math.max(sp60, tgt * (1 - brake * 0.35));
+				if (c.aiSp < sp60) {
+					c.aiSp = Math.min(sp60, c.aiSp + (sp60 / 3.7) * dt);
+				} else {
+					c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 0.7);
+				}
 				const sp = c.aiSp;
 				// Advance distance along track at true speed
 				c.aiS = ((c.aiS + sp * dt) % PER + PER) % PER;
@@ -2511,8 +2523,12 @@
 			// note: steer sign: positive st turns right? h increases -> heading rotates toward +x from +z (left turn when viewed from above w/ camera)...
 			function progress(c) {
 				const p = proj(c.x, c.z);
-				const ds = p.s - c.prevS;
-				if (ds < -PER / 2) {
+				// Lap line = painted start stripe (startFrac), not fixed s=0
+				const startS = getStartS();
+				const rel = ((p.s - startS) % PER + PER) % PER;
+				const prevRel = c.prevRel != null ? c.prevRel : rel;
+				// Crossed start/finish forward: was in last 30% of lap, now in first 30%
+				if (prevRel > PER * 0.7 && rel < PER * 0.3) {
 					if (c.half) {
 						c.lap++;
 						c.half = false;
@@ -2527,9 +2543,10 @@
 							finishOrder.push(c)
 						}
 					}
-				} else if (ds > PER / 2) {
-					/*backwards over line*/ }
-				if (p.s > PER * 0.4 && p.s < PER * 0.6) c.half = true;
+				}
+				// Halfway point relative to start
+				if (rel > PER * 0.4 && rel < PER * 0.6) c.half = true;
+				c.prevRel = rel;
 				c.prevS = p.s;
 				c.s = p.s
 			}
@@ -2939,9 +2956,28 @@
 				cx.lineWidth = 1.5;
 				cx.stroke();
 				cx.setLineDash([]);
-				const s0 = w2c(sp[0]);
+				// Show where Start line slider places the stripe
+				const sf = E.startFrac != null ? E.startFrac : 0.98;
+				const si = Math.floor(((sf % 1) + 1) % 1 * sp.length) % sp.length;
+				const s0 = w2c(sp[si]);
+				const s1 = w2c(sp[(si + 1) % sp.length]);
+				// cross line on track
+				cx.strokeStyle = '#22cc44';
+				cx.lineWidth = 4;
+				cx.beginPath();
+				const dx = s1[0] - s0[0], dy = s1[1] - s0[1];
+				const len = Math.hypot(dx, dy) || 1;
+				const nx = -dy / len * E.w * VS * 0.45, ny = dx / len * E.w * VS * 0.45;
+				cx.moveTo(s0[0] - nx, s0[1] - ny);
+				cx.lineTo(s0[0] + nx, s0[1] + ny);
+				cx.stroke();
+				cx.fillStyle = '#22cc44';
+				cx.beginPath();
+				cx.arc(s0[0], s0[1], 9, 0, 7);
+				cx.fill();
 				cx.fillStyle = '#fff';
-				cx.fillRect(s0[0] - 4, s0[1] - 4, 8, 8);
+				cx.font = 'bold 13px sans-serif';
+				cx.fillText('START ' + Math.round(sf * 100) + '%', s0[0] + 12, s0[1] - 6);
 				E.pts.forEach((p, i) => {
 					const q = w2c(p);
 					cx.beginPath();
