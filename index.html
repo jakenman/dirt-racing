@@ -485,6 +485,7 @@
 				programHeat = 0;
 			let W = 18,
 				BANK = 0.22,
+				startFrac = 0.98,
 				PER = 600,
 				TX = [],
 				TZ = [],
@@ -511,22 +512,26 @@
 				'Small oval': {
 					pts: ovalPts(40, 70),
 					w: 16,
-					bank: 0.25
+					bank: 0.25,
+					startFrac: 0.98
 				},
 				'Medium oval (3/8)': {
 					pts: ovalPts(55, 127),
 					w: 18,
-					bank: 0.22
+					bank: 0.22,
+					startFrac: 0.98
 				},
 				'Large oval': {
 					pts: ovalPts(70, 180),
 					w: 20,
-					bank: 0.18
+					bank: 0.18,
+					startFrac: 0.98
 				},
 				'D-shape': {
 					pts: ovalPts(55, 127, 22),
 					w: 18,
-					bank: 0.2
+					bank: 0.2,
+					startFrac: 0.98
 				}
 			};
 
@@ -553,6 +558,7 @@
 				curTrack = def;
 				W = def.w;
 				BANK = def.bank;
+				startFrac = def.startFrac != null ? def.startFrac : 0.98;
 				let pts = def.pts.slice();
 				let A = 0;
 				for (let i = 0; i < pts.length; i++) {
@@ -735,7 +741,7 @@
 				return t
 			}
 			// ---- shared vehicle helpers ----
-			const DET = isMobile ? 0.5 : 1,
+			const DET = isMobile ? 0.65 : 1,
 				SEG = n => Math.max(6, Math.round(n * DET));
 			const MC = {};
 			const mat = (c, o = {}) => {
@@ -1510,6 +1516,76 @@
 						trackG.add(pl)
 					}
 				}
+				// === Start / finish line + flag stand (position from startFrac) ===
+				const sLine = getStartS();
+				const sLP = cl(sLine, 0);
+				// painted start stripe across track
+				const stripeGeo = new THREE.PlaneGeometry(W * 0.96, 1.2);
+				const stripeMat = new THREE.MeshStandardMaterial({
+					map: (() => {
+						const t = cvTex(128, 32, (x, w, h) => {
+							for (let i = 0; i < 8; i++) {
+								x.fillStyle = i % 2 ? '#111' : '#f5f5f5';
+								x.fillRect(i * (w / 8), 0, w / 8 + 1, h);
+							}
+						});
+						return t;
+					})(),
+					roughness: 0.85,
+					metalness: 0.05
+				});
+				const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+				stripe.rotation.x = -Math.PI / 2;
+				stripe.position.set(sLP.x, 0.04, sLP.z);
+				stripe.rotation.z = Math.atan2(sLP.tx, sLP.tz);
+				trackG.add(stripe);
+				// flag stand box on infield side
+				const standPos = cl(sLine, -W / 2 - 4.5);
+				const stand = new THREE.Group();
+				const box = new THREE.Mesh(rbox(2.2, 2.4, 2.2, 0.12), mat(0x3a3a42));
+				box.position.y = 1.2;
+				stand.add(box);
+				const roof = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.15, 2.5), mat(0x222228));
+				roof.position.y = 2.5;
+				stand.add(roof);
+				// official figure (simple)
+				const off = new THREE.Group();
+				const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.55, 8), mat(0x1a3a6a));
+				torso.position.y = 1.35;
+				off.add(torso);
+				const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), mat(0xe8c4a0));
+				head.position.y = 1.75;
+				off.add(head);
+				const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.55, 8), mat(0x222));
+				legs.position.y = 0.85;
+				off.add(legs);
+				off.position.set(0.3, 0, 0.3);
+				stand.add(off);
+				// flag pole + flag (flag mesh swapped green/yellow by state)
+				const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 3.2, 6), mat(0x888));
+				pole.position.set(-0.6, 2.8, 0.8);
+				stand.add(pole);
+				const flagG = new THREE.Group();
+				flagG.position.set(-0.6, 4.1, 0.8);
+				const flagGreen = new THREE.Mesh(
+					new THREE.PlaneGeometry(1.1, 0.7),
+					new THREE.MeshBasicMaterial({ color: 0x22cc44, side: THREE.DoubleSide })
+				);
+				flagGreen.position.x = 0.55;
+				const flagYellow = new THREE.Mesh(
+					new THREE.PlaneGeometry(1.1, 0.7),
+					new THREE.MeshBasicMaterial({ color: 0xffcc00, side: THREE.DoubleSide })
+				);
+				flagYellow.position.x = 0.55;
+				flagYellow.visible = false;
+				flagG.add(flagGreen);
+				flagG.add(flagYellow);
+				stand.add(flagG);
+				stand.position.set(standPos.x, 0, standPos.z);
+				stand.rotation.y = Math.atan2(standPos.tx, standPos.tz);
+				trackG.add(stand);
+				window.__raceFlags = { green: flagGreen, yellow: flagYellow, group: flagG };
+
 				// tire stacks along outer cushion
 				const tireM = new THREE.MeshStandardMaterial({
 					color: 0x1a1a1a,
@@ -1611,9 +1687,10 @@
 			// cars
 			// class specs
 			const SPEC = {
+				// Real refs: sprint 0-60 ~3s, truck class slower ~5s; short-track tops lower than mile tracks
 				sprint: {
-					maxv: 42,
-					pow: 22,
+					maxv: 38, // ~85 mph
+					pow: 13.5, // ~3.2s to 60
 					grip: 3.2,
 					thrLoss: 1.6,
 					yaw: 4,
@@ -1625,8 +1702,8 @@
 					maxRoll: 0.06
 				},
 				truck: {
-					maxv: 36,
-					pow: 15,
+					maxv: 30, // ~67 mph — clearly slower than sprint
+					pow: 8.2, // ~5s to 60
 					grip: 4.2,
 					thrLoss: 0.8,
 					yaw: 2.4,
@@ -1758,6 +1835,10 @@
 				}
 			}
 
+			function getStartS() {
+				return ((startFrac % 1) + 1) % 1 * PER;
+			}
+
 			function placeCars(list, startS) {
 				list.forEach((c, idx) => {
 					const row = Math.floor(idx / 2),
@@ -1818,7 +1899,7 @@
 					phase = 'feature';
 					cars = allDrivers.slice();
 					spawnMeshes(cars);
-					placeCars(cars, PER - 10);
+					placeCars(cars, getStartS());
 					player = cars[0];
 					startCountdown()
 				} else startHeatProgram()
@@ -1834,7 +1915,7 @@
 				const heat2 = allDrivers.filter(d => d.heatNum === 2);
 				cars = heat1.slice();
 				spawnMeshes(cars);
-				placeCars(cars, PER - 10);
+				placeCars(cars, getStartS());
 				player = cars.find(c => !c.ai) || cars[0];
 				msg.textContent = 'HEAT 1';
 				document.getElementById('resTitle').textContent = 'Heat 1 Results';
@@ -1874,7 +1955,7 @@
 				const lineup = featureLineup || allDrivers;
 				cars = lineup.slice();
 				spawnMeshes(cars);
-				placeCars(cars, PER - 10);
+				placeCars(cars, getStartS());
 				player = cars.find(c => !c.ai) || cars[0];
 				finishOrder = [];
 				raceT = 0;
@@ -2339,9 +2420,10 @@
 				const curv = Math.max(curvAt(c.aiS), curvAt(c.aiS + 10));
 				const inTurn = curv > 0.005;
 				// Player hits ~70-80 mph; leaders 90-100 so they actually compete
-				const targetMph = q === 0 ? 82 : q === 1 ? 79 : q === 2 ? 76 : (72 - Math.min(10, (q - 3) * 2));
+				const baseTop = cls === 'truck' ? 68 : 82;
+				const targetMph = q === 0 ? baseTop : q === 1 ? baseTop - 3 : q === 2 ? baseTop - 6 : (baseTop - 10 - Math.min(8, (q - 3) * 2));
 				let tgt = targetMph / 2.237;
-				if (inTurn) tgt *= cls === 'truck' ? 0.95 : 0.98;
+				if (inTurn) tgt *= cls === 'truck' ? 0.92 : 0.96;
 				let brake = 0;
 				for (const o of cars) {
 					if (o === c || o.done) continue;
@@ -2356,10 +2438,11 @@
 						tgt *= 0.92 + 0.08 * (ahead / 4);
 					}
 				}
-				// Launch matches player feel: ~3 seconds to race speed (~70 mph)
-				if (c.aiSp == null) c.aiSp = tgt * 0.08;
-				const wantSp = Math.max(5, tgt * (1 - brake * 0.35));
-				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 1.15);
+				// Launch: sprint ~3.2s to pace, truck ~5s (real-world-ish)
+				if (c.aiSp == null) c.aiSp = tgt * 0.05;
+				const wantSp = Math.max(4, tgt * (1 - brake * 0.35));
+				const launchK = cls === 'truck' ? 0.65 : 1.0;
+				c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * launchK);
 				const sp = c.aiSp;
 				// Advance distance along track at true speed
 				c.aiS = ((c.aiS + sp * dt) % PER + PER) % PER;
@@ -2639,6 +2722,14 @@
 				const pSp = Math.hypot(player.vx, player.vz);
 				const pThr = (K.KeyW || K.ArrowUp || T.g) ? 1 : 0;
 				setEngineSound(pSp, state === 'race' ? pThr : 0);
+				// Official flags: green when racing, yellow otherwise
+				if (window.__raceFlags) {
+					const go = state === 'race';
+					window.__raceFlags.green.visible = go;
+					window.__raceFlags.yellow.visible = !go;
+					// gentle wave
+					window.__raceFlags.group.rotation.y = Math.sin(raceT * 3) * 0.15;
+				}
 				const dEl = document.getElementById('draftInd');
 				if (dEl) {
 					const df = player.draft || 0;
