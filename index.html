@@ -1516,73 +1516,85 @@
 						trackG.add(pl)
 					}
 				}
-				// === Start / finish line + flag stand (position from startFrac) ===
+				// === Start / finish line + OVERHEAD flag stand on outer fence ===
 				const sLine = getStartS();
 				const sLP = cl(sLine, 0);
-				// painted start stripe across track
-				const stripeGeo = new THREE.PlaneGeometry(W * 0.96, 1.2);
-				const stripeMat = new THREE.MeshStandardMaterial({
-					map: (() => {
-						const t = cvTex(128, 32, (x, w, h) => {
-							for (let i = 0; i < 8; i++) {
-								x.fillStyle = i % 2 ? '#111' : '#f5f5f5';
-								x.fillRect(i * (w / 8), 0, w / 8 + 1, h);
-							}
-						});
-						return t;
-					})(),
-					roughness: 0.85,
-					metalness: 0.05
-				});
-				const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+				// Checkered stripe across the racing surface
+				const stripe = new THREE.Mesh(
+					new THREE.PlaneGeometry(W * 0.95, 1.4),
+					new THREE.MeshStandardMaterial({
+						map: (() => {
+							const t = cvTex(64, 16, (x, w, h) => {
+								for (let i = 0; i < 8; i++) {
+									x.fillStyle = i % 2 ? '#0a0a0a' : '#f0f0f0';
+									x.fillRect((i * w) / 8, 0, w / 8 + 1, h);
+								}
+							});
+							return t;
+						})(),
+						roughness: 0.9,
+						metalness: 0.02
+					})
+				);
+				stripe.position.set(sLP.x, 0.06, sLP.z);
+				// Lay flat and span across track (along surface normal)
+				stripe.rotation.order = 'YXZ';
+				stripe.rotation.y = Math.atan2(sLP.nx, sLP.nz);
 				stripe.rotation.x = -Math.PI / 2;
-				stripe.position.set(sLP.x, 0.04, sLP.z);
-				stripe.rotation.z = Math.atan2(sLP.tx, sLP.tz);
 				trackG.add(stripe);
-				// flag stand box on infield side
-				const standPos = cl(sLine, -W / 2 - 4.5);
+				// Real-style flagstand: outside catch fence, elevated, overhead as you approach
+				const standPos = cl(sLine, W / 2 + 2.2);
 				const stand = new THREE.Group();
-				const box = new THREE.Mesh(rbox(2.2, 2.4, 2.2, 0.12), mat(0x3a3a42));
-				box.position.y = 1.2;
-				stand.add(box);
-				const roof = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.15, 2.5), mat(0x222228));
-				roof.position.y = 2.5;
-				stand.add(roof);
-				// official figure (simple)
-				const off = new THREE.Group();
-				const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.55, 8), mat(0x1a3a6a));
-				torso.position.y = 1.35;
-				off.add(torso);
-				const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), mat(0xe8c4a0));
-				head.position.y = 1.75;
-				off.add(head);
-				const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.55, 8), mat(0x222));
-				legs.position.y = 0.85;
-				off.add(legs);
-				off.position.set(0.3, 0, 0.3);
-				stand.add(off);
-				// flag pole + flag (flag mesh swapped green/yellow by state)
-				const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 3.2, 6), mat(0x888));
-				pole.position.set(-0.6, 2.8, 0.8);
+				// Support posts into the fence line
+				for (const sx of [-1.6, 1.6]) {
+					const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 9, 8), mat(0x555560));
+					post.position.set(sx, 4.5, 0);
+					stand.add(post);
+				}
+				// Cross beams
+				const beam = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.2, 0.2), mat(0x44444a));
+				beam.position.y = 8.2;
+				stand.add(beam);
+				const beam2 = beam.clone();
+				beam2.position.y = 7.4;
+				stand.add(beam2);
+				// Elevated booth at top of fence height
+				const booth = new THREE.Mesh(rbox(2.8, 2.0, 2.2, 0.1), mat(0x2a2a32));
+				booth.position.set(0, 9.2, 0.3);
+				stand.add(booth);
+				const boothRoof = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.12, 2.5), mat(0x1a1a20));
+				boothRoof.position.set(0, 10.25, 0.3);
+				stand.add(boothRoof);
+				// Open front so you see the official
+				const official = new THREE.Group();
+				official.add(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.5, 8), mat(0x1a3a6a)).translateY(0.9));
+				official.add(new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), mat(0xe8c4a0)).translateY(1.25));
+				official.add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.45, 8), mat(0x222)).translateY(0.4));
+				official.position.set(0.15, 8.35, 0.5);
+				stand.add(official);
+				// Flag pole sticking out over the track
+				const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 2.8, 6), mat(0x999));
+				pole.position.set(-0.2, 10.8, -0.8);
 				stand.add(pole);
 				const flagG = new THREE.Group();
-				flagG.position.set(-0.6, 4.1, 0.8);
+				flagG.position.set(-0.2, 11.9, -0.8);
 				const flagGreen = new THREE.Mesh(
-					new THREE.PlaneGeometry(1.1, 0.7),
+					new THREE.PlaneGeometry(1.4, 0.85),
 					new THREE.MeshBasicMaterial({ color: 0x22cc44, side: THREE.DoubleSide })
 				);
-				flagGreen.position.x = 0.55;
+				flagGreen.position.set(0.7, 0, 0);
 				const flagYellow = new THREE.Mesh(
-					new THREE.PlaneGeometry(1.1, 0.7),
+					new THREE.PlaneGeometry(1.4, 0.85),
 					new THREE.MeshBasicMaterial({ color: 0xffcc00, side: THREE.DoubleSide })
 				);
-				flagYellow.position.x = 0.55;
+				flagYellow.position.set(0.7, 0, 0);
 				flagYellow.visible = false;
 				flagG.add(flagGreen);
 				flagG.add(flagYellow);
 				stand.add(flagG);
 				stand.position.set(standPos.x, 0, standPos.z);
-				stand.rotation.y = Math.atan2(standPos.tx, standPos.tz);
+				// Face toward track center
+				stand.rotation.y = Math.atan2(-standPos.nx, -standPos.nz);
 				trackG.add(stand);
 				window.__raceFlags = { green: flagGreen, yellow: flagYellow, group: flagG };
 
@@ -2420,10 +2432,11 @@
 				const curv = Math.max(curvAt(c.aiS), curvAt(c.aiS + 10));
 				const inTurn = curv > 0.005;
 				// Player hits ~70-80 mph; leaders 90-100 so they actually compete
-				const baseTop = cls === 'truck' ? 68 : 82;
-				const targetMph = q === 0 ? baseTop : q === 1 ? baseTop - 3 : q === 2 ? baseTop - 6 : (baseTop - 10 - Math.min(8, (q - 3) * 2));
+				// Leaders only ~3-4 mph over typical player pace for a fair fight
+				const playerPace = cls === 'truck' ? 62 : 70;
+				const targetMph = q === 0 ? playerPace + 4 : q === 1 ? playerPace + 3 : q === 2 ? playerPace + 2 : (playerPace - 1 - Math.min(6, (q - 3) * 1.5));
 				let tgt = targetMph / 2.237;
-				if (inTurn) tgt *= cls === 'truck' ? 0.92 : 0.96;
+				if (inTurn) tgt *= cls === 'truck' ? 0.93 : 0.97;
 				let brake = 0;
 				for (const o of cars) {
 					if (o === c || o.done) continue;
