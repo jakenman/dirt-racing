@@ -2829,11 +2829,13 @@
 				eb = document.getElementById('eb'),
 				ename = document.getElementById('ename');
 			const est = document.getElementById('est'),
-				esn = document.getElementById('esn');
+				esn = document.getElementById('esn'),
+				estart = document.getElementById('estart');
 			let E = {
 					pts: [],
 					w: 18,
 					bank: 0.22,
+					startFrac: 0.98,
 					name: '',
 					stands: true,
 					standsN: 2
@@ -2861,6 +2863,7 @@
 					pts: d.pts.map(p => p.slice()),
 					w: d.w,
 					bank: d.bank,
+					startFrac: d.startFrac != null ? d.startFrac : 0.98,
 					name,
 					stands: d.stands !== false,
 					standsN: d.standsN || 2
@@ -2869,6 +2872,7 @@
 				esn.value = E.standsN;
 				ew.value = E.w;
 				eb.value = E.bank;
+				if (estart) estart.value = Math.round((E.startFrac || 0.98) * 100);
 				ename.value = name;
 				sel = -1;
 				draw()
@@ -2893,6 +2897,12 @@
 			esn.onchange = () => {
 				E.standsN = +esn.value
 			};
+			if (estart) {
+				estart.oninput = () => {
+					E.startFrac = (+estart.value) / 100;
+					draw();
+				};
+			}
 			const w2c = p => [cv.width / 2 + p[0] * VS, cv.height / 2 + p[1] * VS],
 				c2w = (x, y) => [(x - cv.width / 2) / VS, (y - cv.height / 2) / VS];
 
@@ -3004,6 +3014,7 @@
 					pts: E.pts,
 					w: E.w,
 					bank: E.bank,
+					startFrac: E.startFrac != null ? E.startFrac : 0.98,
 					stands: E.stands,
 					standsN: E.standsN
 				};
@@ -3023,6 +3034,7 @@
 					pts: E.pts,
 					w: E.w,
 					bank: E.bank,
+					startFrac: E.startFrac != null ? E.startFrac : 0.98,
 					stands: E.stands,
 					standsN: E.standsN
 				});
