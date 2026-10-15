@@ -450,6 +450,9 @@
 			<select id="epre"></select><button id="eDel">Delete pt</button>
 			<label>Width<input id="ew" type="range" min="12" max="28" step="1"></label><label>Bank<input id="eb"
 					type="range" min="0" max="0.4" step="0.02"></label>
+			<label style="color:#ffd23f;font-weight:bold">Start line
+				<input id="estart" type="range" min="0" max="100" step="1" value="98" style="width:100px;accent-color:#22cc44">
+			</label>
 			<label><input id="est" type="checkbox" checked>Stands</label><select id="esn">
 				<option value="1">1 side</option>
 				<option value="2" selected>2 sides</option>
@@ -1415,7 +1418,9 @@
 						headG = new THREE.SphereGeometry(0.15, 6, 5);
 					const bi = new THREE.InstancedMesh(bodyG, new THREE.MeshLambertMaterial(), people.length),
 						hi = new THREE.InstancedMesh(headG, mat(0xe0b090), people.length);
+					const crowdData = [];
 					people.forEach(([x, y, z, a], i) => {
+						crowdData.push({ x, y, z, a, phase: Math.random() * 6.28, speed: 1.5 + Math.random() * 2.5 });
 						Q.position.set(x, y + 0.45, z);
 						Q.rotation.set(0, a, 0);
 						Q.updateMatrix();
@@ -1426,7 +1431,10 @@
 						Q.updateMatrix();
 						hi.setMatrixAt(i, Q.matrix)
 					});
-					trackG.add(bi, hi)
+					bi.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+					hi.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+					trackG.add(bi, hi);
+					window.__crowd = { bi, hi, data: crowdData, Q: new THREE.Object3D() };
 				}
 				// trees
 				const TN = Math.round(140 * DET),
@@ -1516,87 +1524,109 @@
 						trackG.add(pl)
 					}
 				}
-				// === Start / finish line + OVERHEAD flag stand on outer fence ===
+				// === Start stripe grounded to banked dirt + big fence-line flagstand ===
 				const sLine = getStartS();
-				const sLP = cl(sLine, 0);
-				// Checkered stripe across the racing surface
-				const stripe = new THREE.Mesh(
-					new THREE.PlaneGeometry(W * 0.95, 1.4),
-					new THREE.MeshStandardMaterial({
+				// Stripe follows surface: sample across width at bank height
+				{
+					const segs = 10;
+					const pos = [],
+						idxArr = [],
+						uv = [];
+					for (let i = 0; i <= segs; i++) {
+						const t = i / segs;
+						const lat = -W / 2 + 0.4 + t * (W - 0.8);
+						const y = hAt(R + lat) + 0.05;
+						const a = cl(sLine - 0.7, lat),
+							b = cl(sLine + 0.7, lat);
+						pos.push(a.x, y, a.z, b.x, y, b.z);
+						uv.push(0, t, 1, t);
+						if (i < segs) {
+							const k = i * 2;
+							idxArr.push(k, k + 2, k + 1, k + 1, k + 2, k + 3);
+						}
+					}
+					const sg = new THREE.BufferGeometry();
+					sg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+					sg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+					sg.setIndex(idxArr);
+					sg.computeVertexNormals();
+					const stripeMat = new THREE.MeshStandardMaterial({
 						map: (() => {
 							const t = cvTex(64, 16, (x, w, h) => {
 								for (let i = 0; i < 8; i++) {
-									x.fillStyle = i % 2 ? '#0a0a0a' : '#f0f0f0';
+									x.fillStyle = i % 2 ? '#111' : '#eee';
 									x.fillRect((i * w) / 8, 0, w / 8 + 1, h);
 								}
 							});
 							return t;
 						})(),
-						roughness: 0.9,
-						metalness: 0.02
-					})
-				);
-				stripe.position.set(sLP.x, 0.06, sLP.z);
-				// Lay flat and span across track (along surface normal)
-				stripe.rotation.order = 'YXZ';
-				stripe.rotation.y = Math.atan2(sLP.nx, sLP.nz);
-				stripe.rotation.x = -Math.PI / 2;
-				trackG.add(stripe);
-				// Real-style flagstand: outside catch fence, elevated, overhead as you approach
-				const standPos = cl(sLine, W / 2 + 2.2);
-				const stand = new THREE.Group();
-				// Support posts into the fence line
-				for (const sx of [-1.6, 1.6]) {
-					const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 9, 8), mat(0x555560));
-					post.position.set(sx, 4.5, 0);
-					stand.add(post);
+						roughness: 0.95,
+						metalness: 0,
+						polygonOffset: true,
+						polygonOffsetFactor: -2,
+						polygonOffsetUnits: -2
+					});
+					trackG.add(new THREE.Mesh(sg, stripeMat));
 				}
-				// Cross beams
-				const beam = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.2, 0.2), mat(0x44444a));
-				beam.position.y = 8.2;
-				stand.add(beam);
-				const beam2 = beam.clone();
-				beam2.position.y = 7.4;
-				stand.add(beam2);
-				// Elevated booth at top of fence height
-				const booth = new THREE.Mesh(rbox(2.8, 2.0, 2.2, 0.1), mat(0x2a2a32));
-				booth.position.set(0, 9.2, 0.3);
-				stand.add(booth);
-				const boothRoof = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.12, 2.5), mat(0x1a1a20));
-				boothRoof.position.set(0, 10.25, 0.3);
-				stand.add(boothRoof);
-				// Open front so you see the official
-				const official = new THREE.Group();
-				official.add(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.5, 8), mat(0x1a3a6a)).translateY(0.9));
-				official.add(new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), mat(0xe8c4a0)).translateY(1.25));
-				official.add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.45, 8), mat(0x222)).translateY(0.4));
-				official.position.set(0.15, 8.35, 0.5);
-				stand.add(official);
-				// Flag pole sticking out over the track
-				const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 2.8, 6), mat(0x999));
-				pole.position.set(-0.2, 10.8, -0.8);
-				stand.add(pole);
-				const flagG = new THREE.Group();
-				flagG.position.set(-0.2, 11.9, -0.8);
-				const flagGreen = new THREE.Mesh(
-					new THREE.PlaneGeometry(1.4, 0.85),
-					new THREE.MeshBasicMaterial({ color: 0x22cc44, side: THREE.DoubleSide })
-				);
-				flagGreen.position.set(0.7, 0, 0);
-				const flagYellow = new THREE.Mesh(
-					new THREE.PlaneGeometry(1.4, 0.85),
-					new THREE.MeshBasicMaterial({ color: 0xffcc00, side: THREE.DoubleSide })
-				);
-				flagYellow.position.set(0.7, 0, 0);
-				flagYellow.visible = false;
-				flagG.add(flagGreen);
-				flagG.add(flagYellow);
-				stand.add(flagG);
-				stand.position.set(standPos.x, 0, standPos.z);
-				// Face toward track center
-				stand.rotation.y = Math.atan2(-standPos.nx, -standPos.nz);
-				trackG.add(stand);
-				window.__raceFlags = { green: flagGreen, yellow: flagYellow, group: flagG };
+				// Flagstand: wraps the OUTER fence — platform over the top rail, hangs toward track
+				{
+					const standPos = cl(sLine, W / 2 + 1.4);
+					const stand = new THREE.Group();
+					const fenceTopY = hAt(R + W / 2 + 1) + 7.2;
+					// Long base along fence (outlines the fence line)
+					const along = 7;
+					const base = new THREE.Mesh(new THREE.BoxGeometry(along, 0.35, 2.4), mat(0x3a3a44));
+					base.position.set(0, fenceTopY, 0);
+					stand.add(base);
+					// Legs down the outside of the fence
+					for (const ax of [-2.8, -0.9, 0.9, 2.8]) {
+						const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, fenceTopY + 0.2, 6), mat(0x4a4a55));
+						leg.position.set(ax, fenceTopY / 2, 1.0);
+						stand.add(leg);
+					}
+					// Booth sitting on platform
+					const booth = new THREE.Mesh(rbox(3.4, 2.3, 2.0, 0.12), mat(0x2c2c36));
+					booth.position.set(0, fenceTopY + 1.35, 0.15);
+					stand.add(booth);
+					const roof = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.14, 2.3), mat(0x1a1a22));
+					roof.position.set(0, fenceTopY + 2.55, 0.15);
+					stand.add(roof);
+					// Front rail overhang toward track
+					const rail = new THREE.Mesh(new THREE.BoxGeometry(along * 0.9, 0.12, 0.12), mat(0x888));
+					rail.position.set(0, fenceTopY + 0.5, -1.3);
+					stand.add(rail);
+					// Official
+					const official = new THREE.Group();
+					official.add(new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.55, 8), mat(0x1a3a6a)).translateY(1.0));
+					official.add(new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), mat(0xe8c4a0)).translateY(1.38));
+					official.add(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.5, 8), mat(0x222)).translateY(0.45));
+					official.position.set(0.2, fenceTopY + 0.2, -0.4);
+					stand.add(official);
+					// Flagpole over the track side
+					const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 3.2, 6), mat(0xaaa));
+					pole.position.set(-0.4, fenceTopY + 2.9, -1.5);
+					stand.add(pole);
+					const flagG = new THREE.Group();
+					flagG.position.set(-0.4, fenceTopY + 4.2, -1.5);
+					const flagGreen = new THREE.Mesh(
+						new THREE.PlaneGeometry(1.6, 1.0),
+						new THREE.MeshBasicMaterial({ color: 0x22cc44, side: THREE.DoubleSide })
+					);
+					flagGreen.position.x = 0.8;
+					const flagYellow = new THREE.Mesh(
+						new THREE.PlaneGeometry(1.6, 1.0),
+						new THREE.MeshBasicMaterial({ color: 0xffcc00, side: THREE.DoubleSide })
+					);
+					flagYellow.position.x = 0.8;
+					flagYellow.visible = false;
+					flagG.add(flagGreen);
+					flagG.add(flagYellow);
+					stand.add(flagG);
+					stand.position.set(standPos.x, 0, standPos.z);
+					stand.rotation.y = Math.atan2(-standPos.nx, -standPos.nz);
+					trackG.add(stand);
+					window.__raceFlags = { green: flagGreen, yellow: flagYellow, group: flagG };
+				}
 
 				// tire stacks along outer cushion
 				const tireM = new THREE.MeshStandardMaterial({
@@ -2740,8 +2770,29 @@
 					const go = state === 'race';
 					window.__raceFlags.green.visible = go;
 					window.__raceFlags.yellow.visible = !go;
-					// gentle wave
-					window.__raceFlags.group.rotation.y = Math.sin(raceT * 3) * 0.15;
+					window.__raceFlags.group.rotation.y = Math.sin(raceT * 3) * 0.18;
+				}
+				// Crowd bob / cheer when cars pass
+				if (window.__crowd && (state === 'race' || state === 'count')) {
+					const cr = window.__crowd;
+					const Q = cr.Q;
+					const px = player ? player.x : 0,
+						pz = player ? player.z : 0;
+					for (let i = 0; i < cr.data.length; i++) {
+						const d = cr.data[i];
+						const dist = Math.hypot(d.x - px, d.z - pz);
+						const cheer = dist < 40 ? 1.2 : 0.45;
+						const bob = Math.sin(raceT * d.speed + d.phase) * 0.12 * cheer;
+						Q.position.set(d.x, d.y + 0.45 + bob, d.z);
+						Q.rotation.set(0, d.a, 0);
+						Q.updateMatrix();
+						cr.bi.setMatrixAt(i, Q.matrix);
+						Q.position.y += 0.5;
+						Q.updateMatrix();
+						cr.hi.setMatrixAt(i, Q.matrix);
+					}
+					cr.bi.instanceMatrix.needsUpdate = true;
+					cr.hi.instanceMatrix.needsUpdate = true;
 				}
 				const dEl = document.getElementById('draftInd');
 				if (dEl) {
