@@ -669,7 +669,7 @@
 			ren.shadowMap.enabled = !isMobile;
 			ren.shadowMap.type = THREE.PCFSoftShadowMap;
 			ren.toneMapping = THREE.ACESFilmicToneMapping;
-			ren.toneMappingExposure = isMobile ? 1.55 : 1.35;
+			ren.toneMappingExposure = isMobile ? 1.48 : 1.28;
 			document.body.prepend(ren.domElement);
 			const scene = new THREE.Scene();
 			scene.background = (() => {
@@ -689,12 +689,13 @@
 				t.colorSpace = THREE.SRGBColorSpace;
 				return t
 			})();
-			scene.fog = new THREE.FogExp2(0x1a1020, isMobile ? 0.0032 : 0.0026);
+			scene.fog = new THREE.FogExp2(0x18121c, isMobile ? 0.0028 : 0.0023);
 			const cam = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 900);
 			// Stadium dusk: deep sky, warm clay, bright floods
-			scene.add(new THREE.HemisphereLight(0x6a80b0, 0x3a2010, isMobile ? 0.45 : 0.4));
-			const sun = new THREE.DirectionalLight(0xffc090, isMobile ? 1.35 : 1.2);
-			sun.position.set(40, 80, 30);
+			// Stadium dusk: warm key, cool fill, sunset rim — sells metal/paint without extra point lights
+			scene.add(new THREE.HemisphereLight(0x8aa0c8, 0x4a2818, isMobile ? 0.5 : 0.42));
+			const sun = new THREE.DirectionalLight(0xffd0a0, isMobile ? 1.45 : 1.3);
+			sun.position.set(55, 90, 35);
 			sun.castShadow = !isMobile;
 			if (!isMobile) {
 				sun.shadow.mapSize.set(2048, 2048);
@@ -708,13 +709,13 @@
 				sun.shadow.radius = 2
 			}
 			scene.add(sun);
-			const fill = new THREE.DirectionalLight(0x4466aa, 0.35);
-			fill.position.set(-50, 40, -30);
+			const fill = new THREE.DirectionalLight(0x5577aa, 0.4);
+			fill.position.set(-55, 45, -25);
 			scene.add(fill);
-			const rim = new THREE.DirectionalLight(0xff6622, isMobile ? 0.55 : 0.4);
-			rim.position.set(-20, 25, -60);
+			const rim = new THREE.DirectionalLight(0xff7733, isMobile ? 0.6 : 0.48);
+			rim.position.set(-25, 30, -70);
 			scene.add(rim);
-			const amb = new THREE.AmbientLight(0x2a3040, isMobile ? 0.35 : 0.25);
+			const amb = new THREE.AmbientLight(0x2e3448, isMobile ? 0.32 : 0.22);
 			scene.add(amb);
 			// Cheap mobile env map from sky gradient (cars pick up sunset reflections)
 			try {
@@ -749,27 +750,38 @@
 			const MC = {};
 			const mat = (c, o = {}) => {
 				const k = c + JSON.stringify(o);
+				// Race paint: controlled sheen, not plastic toy
 				return MC[k] || (MC[k] = new THREE.MeshStandardMaterial({
 					color: c,
-					roughness: 0.65,
-					metalness: 0.08,
+					roughness: 0.38,
+					metalness: 0.18,
+					envMapIntensity: isMobile ? 0.55 : 0.85,
 					...o
 				}))
 			};
 			const chrome = new THREE.MeshStandardMaterial({
-					color: 0xd0d4d8,
-					metalness: 0.85,
-					roughness: 0.25
+					color: 0xc8ced4,
+					metalness: 0.92,
+					roughness: 0.18,
+					envMapIntensity: isMobile ? 0.7 : 1.1
 				}),
 				dark = new THREE.MeshStandardMaterial({
-					color: 0x1a1a1a,
-					roughness: 0.9,
-					metalness: 0.05
+					color: 0x141416,
+					roughness: 0.82,
+					metalness: 0.12,
+					envMapIntensity: 0.3
 				}),
 				tubeM = new THREE.MeshStandardMaterial({
-					color: 0x2a2a2a,
-					metalness: 0.4,
-					roughness: 0.45
+					color: 0x3a3a3e,
+					metalness: 0.55,
+					roughness: 0.38,
+					envMapIntensity: 0.5
+				}),
+				rubberM = new THREE.MeshStandardMaterial({
+					color: 0x1a1a1a,
+					roughness: 0.92,
+					metalness: 0.02,
+					envMapIntensity: 0.15
 				});
 
 			function cvTex(w, h, fn) {
@@ -807,19 +819,35 @@
 				}))
 			}
 			const treadTex = cvTex(64, 256, (x, w, h) => {
-				x.fillStyle = '#1c1c1c';
+				x.fillStyle = '#181818';
 				x.fillRect(0, 0, w, h);
-				x.fillStyle = '#070707';
-				for (let y = 0; y < h; y += 16) {
-					x.fillRect(0, y, w * 0.45, 7);
-					x.fillRect(w * 0.55, y + 8, w * 0.45, 7)
+				// Blocky dirt-tire tread blocks
+				for (let y = 0; y < h; y += 14) {
+					x.fillStyle = '#0a0a0a';
+					x.fillRect(2, y + 1, w * 0.42, 8);
+					x.fillRect(w * 0.56, y + 6, w * 0.42, 8);
+					x.fillStyle = '#2a2a2a';
+					x.fillRect(3, y + 2, w * 0.38, 2);
+					x.fillRect(w * 0.58, y + 7, w * 0.38, 2);
 				}
+				// Sidewall rib hint on edges
+				x.fillStyle = '#0e0e0e';
+				x.fillRect(0, 0, 3, h);
+				x.fillRect(w - 3, 0, 3, h);
 			});
 			treadTex.wrapS = treadTex.wrapT = THREE.RepeatWrapping;
-			const treadM = new THREE.MeshLambertMaterial({
-					map: treadTex
+			const treadM = new THREE.MeshStandardMaterial({
+					map: treadTex,
+					roughness: 0.95,
+					metalness: 0.02,
+					envMapIntensity: 0.1
 				}),
-				sideM = mat(0x202020);
+				sideM = new THREE.MeshStandardMaterial({
+					color: 0x151515,
+					roughness: 0.9,
+					metalness: 0.03,
+					envMapIntensity: 0.12
+				});
 			const WG = {};
 
 			function wheel(r, w, rimC) {
@@ -844,7 +872,7 @@
 				const G = WG[k],
 					s = new THREE.Group();
 				s.add(new THREE.Mesh(G.t, treadM));
-				s.add(new THREE.Mesh(G.rim, mat(rimC)));
+				s.add(new THREE.Mesh(G.rim, mat(rimC, { roughness: 0.32, metalness: 0.35, envMapIntensity: 0.75 })));
 				s.add(new THREE.Mesh(G.hub, chrome));
 				for (const sd of [-1, 1]) {
 					const a = new THREE.Mesh(G.sw, sideM);
@@ -928,9 +956,9 @@
 					g.add(o);
 					return o
 				};
-				const bodyDark = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.7, metalness: 0.15 });
-				const alum = new THREE.MeshStandardMaterial({ color: 0xb0b4b8, roughness: 0.35, metalness: 0.7 });
-				const blackPaint = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.55, metalness: 0.2 });
+				const bodyDark = new THREE.MeshStandardMaterial({ color: 0x161618, roughness: 0.72, metalness: 0.22, envMapIntensity: 0.35 });
+				const alum = new THREE.MeshStandardMaterial({ color: 0xb8bcc0, roughness: 0.28, metalness: 0.78, envMapIntensity: 0.9 });
+				const blackPaint = new THREE.MeshStandardMaterial({ color: 0x0e0e10, roughness: 0.42, metalness: 0.25, envMapIntensity: 0.45 });
 				// --- chassis / belly ---
 				add(new THREE.BoxGeometry(0.9, 0.12, 3.4), bodyDark, 0, 0.42, 0);
 				// nose cone — multi-section taper
@@ -946,7 +974,7 @@
 				add(rbox(1.0, 0.58, 1.15, 0.16), m, 0, 0.92, 1.0);
 				add(new THREE.BoxGeometry(0.85, 0.35, 0.5), blackPaint, 0, 0.85, 1.55);
 				// side panels + decals
-				const dm = new THREE.MeshStandardMaterial({ map: decal(color, num, brand), roughness: 0.55, metalness: 0.1 });
+				const dm = new THREE.MeshStandardMaterial({ map: decal(color, num, brand), roughness: 0.42, metalness: 0.16, envMapIntensity: 0.7 });
 				for (const s of [-1, 1]) {
 					const p = add(new THREE.PlaneGeometry(1.55, 0.55), dm, s * 0.46, 0.82, -0.4);
 					p.rotation.y = s * Math.PI / 2;
@@ -1006,7 +1034,7 @@
 				g.add(wing);
 				const wp = new THREE.Mesh(rbox(1.85, 0.05, 2.05, 0.025), m);
 				wing.add(wp);
-				const wd = new THREE.MeshStandardMaterial({ map: decal(color, num, brand), side: THREE.DoubleSide, roughness: 0.5, metalness: 0.1 });
+				const wd = new THREE.MeshStandardMaterial({ map: decal(color, num, brand), side: THREE.DoubleSide, roughness: 0.4, metalness: 0.15, envMapIntensity: 0.65 });
 				for (const s of [-1, 1]) {
 					const b = new THREE.Mesh(new THREE.PlaneGeometry(2.15, 0.95), wd);
 					b.position.set(s * 0.92, 0.12, 0);
@@ -1096,8 +1124,8 @@
 					g.add(o);
 					return o
 				};
-				const blackPaint = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.6, metalness: 0.15 });
-				const alum = new THREE.MeshStandardMaterial({ color: 0xa8acb0, roughness: 0.4, metalness: 0.65 });
+				const blackPaint = new THREE.MeshStandardMaterial({ color: 0x101012, roughness: 0.48, metalness: 0.22, envMapIntensity: 0.4 });
+				const alum = new THREE.MeshStandardMaterial({ color: 0xb0b4b8, roughness: 0.3, metalness: 0.72, envMapIntensity: 0.85 });
 				add(truckBody, m, 0, 0, 0);
 				add(new THREE.BoxGeometry(1.75, 0.18, 4.6), dark, 0, 0.48, 0);
 				// bed
@@ -1107,7 +1135,7 @@
 				}
 				add(new THREE.BoxGeometry(1.65, 0.3, 0.08), m, 0, 1.42, 2.35);
 				// glass
-				const glass = new THREE.MeshStandardMaterial({ color: 0x1a2838, roughness: 0.15, metalness: 0.4, transparent: true, opacity: 0.75 });
+				const glass = new THREE.MeshStandardMaterial({ color: 0x1a2838, roughness: 0.12, metalness: 0.55, transparent: true, opacity: 0.72, envMapIntensity: 1.0 });
 				const ws = add(new THREE.PlaneGeometry(1.65, 0.75), glass, 0, 1.62, -0.7);
 				ws.rotation.x = -0.85;
 				ws.rotation.y = Math.PI;
@@ -1186,44 +1214,57 @@
 
 			
 			// track mesh
-			const dirtTex = cvTex(512, 1024, (x, w, h) => {
-				x.fillStyle = '#5c3a22';
+			const dirtTex = cvTex(isMobile ? 384 : 512, isMobile ? 768 : 1024, (x, w, h) => {
+				// Base clay
+				x.fillStyle = '#4a2e1a';
 				x.fillRect(0, 0, w, h);
-				// multi-scale dirt noise
-				for (let i = 0; i < 14000 * DET; i++) {
+				// Multi-scale clay grain
+				const grains = Math.floor((isMobile ? 9000 : 16000) * DET);
+				for (let i = 0; i < grains; i++) {
 					const v = Math.random(),
-						sz = 1 + Math.random() * 4;
-					x.fillStyle = v > 0.55 ? `rgba(160,110,65,${0.08+Math.random()*0.22})` : v > 0.25 ?
-						`rgba(40,22,10,${0.1+Math.random()*0.2})` : `rgba(90,55,30,${0.05+Math.random()*0.15})`;
+						sz = 0.8 + Math.random() * 3.5;
+					x.fillStyle = v > 0.6 ? `rgba(150,100,58,${0.06+Math.random()*0.18})` : v > 0.3 ?
+						`rgba(32,18,8,${0.08+Math.random()*0.18})` : `rgba(85,52,28,${0.05+Math.random()*0.12})`;
 					x.fillRect(Math.random() * w, Math.random() * h, sz, sz)
 				}
-				// packed racing groove (darker, smoother)
+				// Packed racing groove — darker, polished clay
 				const gr = x.createLinearGradient(0, 0, 0, h);
-				gr.addColorStop(0.12, 'rgba(25,14,8,0)');
-				gr.addColorStop(0.28, 'rgba(22,12,6,.55)');
-				gr.addColorStop(0.42, 'rgba(22,12,6,.35)');
-				gr.addColorStop(0.55, 'rgba(25,14,8,0)');
+				gr.addColorStop(0.08, 'rgba(20,11,6,0)');
+				gr.addColorStop(0.22, 'rgba(18,10,5,.62)');
+				gr.addColorStop(0.38, 'rgba(28,15,8,.48)');
+				gr.addColorStop(0.52, 'rgba(22,12,6,.25)');
+				gr.addColorStop(0.62, 'rgba(20,11,6,0)');
 				x.fillStyle = gr;
 				x.fillRect(0, 0, w, h);
-				// long tire grooves
-				for (let i = 0; i < 110; i++) {
-					const y = h * (0.15 + Math.random() * 0.6);
-					x.strokeStyle = `rgba(18,10,5,${0.12+Math.random()*0.28})`;
-					x.lineWidth = 1.5 + Math.random() * 6;
+				// Rubber-laid tire marks in the groove
+				for (let i = 0; i < (isMobile ? 70 : 120); i++) {
+					const y = h * (0.14 + Math.random() * 0.48);
+					x.strokeStyle = `rgba(12,7,4,${0.14+Math.random()*0.32})`;
+					x.lineWidth = 1.2 + Math.random() * 5;
 					x.beginPath();
 					x.moveTo(0, y);
-					x.bezierCurveTo(w * .25, y + rnd0(), w * .6, y + rnd0(), w, y + rnd0() * 0.3);
+					x.bezierCurveTo(w * .22, y + rnd0(), w * .55, y + rnd0(), w, y + rnd0() * 0.25);
 					x.stroke()
 				}
-				// outer cushion / loose dirt
-				x.fillStyle = 'rgba(110,75,40,.4)';
-				x.fillRect(0, h * 0.82, w, h * 0.18);
-				// subtle wet patches
-				for (let i = 0; i < 8; i++) {
-					const yy = h * (0.2 + Math.random() * 0.5),
-						hh = 8 + Math.random() * 20;
-					x.fillStyle = `rgba(50,30,15,${0.15+Math.random()*0.2})`;
-					x.fillRect(Math.random() * w * 0.7, yy, w * 0.3 + Math.random() * w * 0.2, hh)
+				// Mid-track transition / moisture sheen strips
+				for (let i = 0; i < 6; i++) {
+					const yy = h * (0.18 + Math.random() * 0.4);
+					x.fillStyle = `rgba(70,42,22,${0.12+Math.random()*0.15})`;
+					x.fillRect(0, yy, w, 3 + Math.random() * 10);
+				}
+				// Outer cushion — loose light dirt
+				const cush = x.createLinearGradient(0, h * 0.72, 0, h);
+				cush.addColorStop(0, 'rgba(120,82,45,0)');
+				cush.addColorStop(0.35, 'rgba(125,85,48,.35)');
+				cush.addColorStop(1, 'rgba(140,95,55,.55)');
+				x.fillStyle = cush;
+				x.fillRect(0, h * 0.72, w, h * 0.28);
+				// Cushion clods
+				for (let i = 0; i < 40; i++) {
+					x.fillStyle = `rgba(100,68,38,${0.1+Math.random()*0.25})`;
+					x.beginPath();
+					x.arc(Math.random() * w, h * (0.78 + Math.random() * 0.2), 1 + Math.random() * 4, 0, 7);
+					x.fill();
 				}
 			});
 
@@ -1231,18 +1272,20 @@
 				return (Math.random() - .5) * 22
 			}
 			dirtTex.wrapS = dirtTex.wrapT = THREE.RepeatWrapping;
-			dirtTex.anisotropy = 4;
+			dirtTex.anisotropy = isMobile ? 2 : 8;
 			const dirtMat = new THREE.MeshStandardMaterial({
 					map: dirtTex,
 					side: THREE.DoubleSide,
-					roughness: isMobile ? 0.78 : 0.88,
-					metalness: 0.05
+					roughness: isMobile ? 0.84 : 0.9,
+					metalness: 0.02,
+					envMapIntensity: 0.2
 				}),
 				wm = new THREE.MeshStandardMaterial({
-					color: 0xe8e8e8,
+					color: 0xd8d8dc,
 					side: THREE.DoubleSide,
-					roughness: 0.55,
-					metalness: 0.15
+					roughness: 0.62,
+					metalness: 0.12,
+					envMapIntensity: 0.25
 				}),
 				fm = new THREE.MeshBasicMaterial({
 					color: 0x999999,
@@ -1765,10 +1808,11 @@
 				const c = document.createElement('canvas');
 				c.width = c.height = 64;
 				const x = c.getContext('2d');
-				const gr = x.createRadialGradient(32, 32, 1, 32, 32, 30);
-				gr.addColorStop(0, 'rgba(140,95,50,.85)');
-				gr.addColorStop(0.4, 'rgba(90,55,30,.5)');
-				gr.addColorStop(1, 'rgba(50,30,15,0)');
+				const gr = x.createRadialGradient(32, 32, 2, 32, 32, 30);
+				gr.addColorStop(0, 'rgba(170,120,70,.75)');
+				gr.addColorStop(0.25, 'rgba(120,80,45,.55)');
+				gr.addColorStop(0.55, 'rgba(80,50,28,.28)');
+				gr.addColorStop(1, 'rgba(40,25,12,0)');
 				x.fillStyle = gr;
 				x.fillRect(0, 0, 64, 64);
 				return new THREE.CanvasTexture(c)
@@ -2700,15 +2744,19 @@
 					if (c.dmg > 0.35 && Math.random() < c.dmg * dt * 25) puff(c.x - Math.sin(c.h) * 1.5, y + 1.2, c.z -
 						Math.cos(c.h) * 1.5, 0.3 + 0.5 * c.dmg);
 					const sp = Math.hypot(c.vx, c.vz);
-					// Realistic roost: only on real slip, amount depends on track grit (bank/width)
+					// Roost tied to rear wheels + slip — grit scales with track
 					const slipA = Math.abs(c.slip || 0);
-					const grit = 0.25 + BANK * 1.1 + Math.max(0, W - 16) * 0.025; // sticky tracks = less dust
-					if (sp > 10 && slipA > 0.22 && Math.random() < slipA * grit * dt * 28) {
+					const grit = 0.22 + BANK * 1.0 + Math.max(0, W - 16) * 0.02;
+					if (sp > 9 && slipA > 0.18 && Math.random() < slipA * grit * dt * 32) {
 						const rx = Math.cos(c.h),
 							rz = -Math.sin(c.h),
 							side = Math.sign(c.slip || 1);
-						const bx = c.x - Math.sin(c.h) * 1.3, bz = c.z - Math.cos(c.h) * 1.3;
-						puff(bx + rx * side * 0.85, y + 0.18, bz + rz * side * 0.85, 0.28 + slipA * 0.35 * grit);
+						// Rear axle approx
+						const bx = c.x - Math.sin(c.h) * 1.15,
+							bz = c.z - Math.cos(c.h) * 1.15;
+						puff(bx + rx * side * 0.95, y + 0.2, bz + rz * side * 0.95, 0.32 + slipA * 0.4 * grit);
+						if (slipA > 0.4 && Math.random() < 0.35)
+							puff(bx + rx * side * 1.25, y + 0.35, bz + rz * side * 1.25, 0.22 + slipA * 0.2);
 					}
 					c.mesh.wheels.forEach((w, i) => {
 						w.children[0].rotation.x += sp * dt / 0.5;
