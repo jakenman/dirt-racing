@@ -802,20 +802,33 @@
 			function decal(color, num, brand) {
 				const k = color + num + brand;
 				return decalCache[k] || (decalCache[k] = cvTex(256, 128, (x, w, h) => {
-					x.fillStyle = '#' + new THREE.Color(color).getHexString();
+					const col = '#' + new THREE.Color(color).getHexString();
+					x.fillStyle = col;
 					x.fillRect(0, 0, w, h);
-					x.fillStyle = 'rgba(255,255,255,.9)';
-					x.fillRect(0, h * 0.62, w, h * 0.3);
+					// gradient sheen
+					const g = x.createLinearGradient(0, 0, 0, h);
+					g.addColorStop(0, 'rgba(255,255,255,.12)');
+					g.addColorStop(0.5, 'rgba(0,0,0,0)');
+					g.addColorStop(1, 'rgba(0,0,0,.2)');
+					x.fillStyle = g;
+					x.fillRect(0, 0, w, h);
+					// sponsor bar
+					x.fillStyle = 'rgba(255,255,255,.92)';
+					x.fillRect(0, h * 0.68, w, h * 0.28);
 					x.fillStyle = '#111';
-					x.font = 'bold 26px Arial';
+					x.font = 'bold 22px Arial';
 					x.textAlign = 'center';
-					x.fillText(brand, w / 2, h * 0.85);
-					x.lineWidth = 8;
+					x.fillText(brand, w / 2, h * 0.88);
+					// number with hard race outline
+					x.lineWidth = 10;
 					x.strokeStyle = '#000';
-					x.font = 'italic bold 70px Arial';
+					x.font = 'italic bold 72px Impact, Arial Black, Arial';
 					x.strokeText(num, w / 2, h * 0.55);
 					x.fillStyle = '#fff';
-					x.fillText(num, w / 2, h * 0.55)
+					x.fillText(num, w / 2, h * 0.55);
+					// thin accent stripe
+					x.fillStyle = 'rgba(255,255,255,.35)';
+					x.fillRect(0, h * 0.08, w, 4);
 				}))
 			}
 			const treadTex = cvTex(64, 256, (x, w, h) => {
