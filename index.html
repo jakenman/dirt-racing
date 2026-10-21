@@ -899,7 +899,18 @@
 					const b = new THREE.Mesh(G.bl, chrome);
 					b.position.x = sd * w * 0.47;
 					b.rotation.y = Math.PI / 2;
-					s.add(b)
+					s.add(b);
+					// beadlock bolts around the rim
+					for (let i = 0; i < 8; i++) {
+						const ang = (i / 8) * Math.PI * 2;
+						const bolt = new THREE.Mesh(
+							new THREE.CylinderGeometry(r * 0.04, r * 0.04, w * 0.12, 5),
+							chrome
+						);
+						bolt.rotation.z = Math.PI / 2;
+						bolt.position.set(sd * w * 0.5, Math.sin(ang) * r * 0.72, Math.cos(ang) * r * 0.72);
+						s.add(bolt);
+					}
 				}
 				return s
 			}
