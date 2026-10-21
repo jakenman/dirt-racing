@@ -1161,6 +1161,18 @@
 				}
 				tube(g, [-0.32, 0.72, -2.1], [-0.55, 0.88, -2.5], 0.022, tubeM);
 				tube(g, [0.32, 0.72, -2.1], [0.55, 0.88, -2.5], 0.022, tubeM);
+				// coilover shocks (visual only)
+				for (const [x, z] of [[-0.85, -1.5], [0.85, -1.5], [-1.0, 1.0], [1.15, 1.0]]) {
+					add(new THREE.CylinderGeometry(0.04, 0.04, 0.35, 6), chrome, x, 0.75, z);
+					add(new THREE.CylinderGeometry(0.06, 0.06, 0.12, 6), blackPaint, x, 0.95, z);
+				}
+				// mud flaps behind rears
+				for (const s of [-1, 1]) {
+					const flap = add(new THREE.BoxGeometry(0.35, 0.35, 0.03), blackPaint, s * 1.15, 0.55, 1.55);
+					flap.rotation.x = 0.25;
+				}
+				// wing cross-brace
+				tube(g, [-0.55, 2.45, 0.15], [0.55, 2.45, 0.15], 0.025, tubeM);
 				// wheels — heavy stagger (right-rear biggest)
 				const wheels = [];
 				for (const [x, z, r, w] of [
