@@ -366,34 +366,34 @@
 			opacity: 0; transition: opacity 0.2s;
 		}
 	
-		#garagePanel {
-			pointer-events: auto;
-			max-height: 48vh;
-			overflow-y: auto;
+		#garage {
 			-webkit-overflow-scrolling: touch;
 			overscroll-behavior: contain;
-			padding: 12px 14px 18px;
-			background: rgba(0,0,0,.78);
-			border-top: 1px solid rgba(255,210,63,.35);
+		}
+		#garagePanel {
+			pointer-events: auto;
+			width: 100%;
+			max-width: 520px;
+			margin: 0 auto;
+			padding: 16px 14px 28px;
+			box-sizing: border-box;
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			gap: 10px;
-			width: 100%;
-			box-sizing: border-box;
+			gap: 12px;
 		}
 		@media (orientation: landscape) {
 			#garagePanel {
-				max-height: 42vh;
-				padding: 8px 12px 12px;
-				gap: 6px;
+				max-width: 900px;
+				padding: 10px 12px 20px;
+				gap: 8px;
 			}
-			#garagePanel h1 { font-size: 18px !important; margin: 0 !important; }
-			#garagePanel .gCard { padding: 8px 12px !important; min-width: 140px !important; }
-			#garagePanel button.stepBtn { min-width: 36px; height: 36px; }
-		}
-		@media (orientation: landscape) and (max-height: 420px) {
-			#garagePanel { max-height: 55vh; }
+			#garagePanel h1 { font-size: 20px !important; }
+			#garage .gRow {
+				flex-direction: row !important;
+				flex-wrap: wrap !important;
+				justify-content: center !important;
+			}
 		}
 	</style>
 </head>
@@ -433,11 +433,12 @@
 			heavy, rolls in the corners, more grip, slower.</div>
 	</div>
 	<div id="garage"
-		style="position:fixed;inset:0;display:none;background:linear-gradient(to top, rgba(0,0,0,.9) 0%, rgba(0,0,0,.4) 50%, rgba(0,0,0,.15) 100%);color:#fff;align-items:stretch;justify-content:flex-end;flex-direction:column;gap:0;z-index:5;padding:0;pointer-events:none">
+		style="position:fixed;inset:0;display:none;background:rgba(0,0,0,.88);color:#fff;align-items:flex-start;justify-content:center;flex-direction:column;gap:0;z-index:5;padding:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;pointer-events:auto">
 		<div id="garagePanel">
-		<h1 style="color:#ffd23f;margin:0;font-size:28px;pointer-events:auto;text-shadow:0 2px 8px #000">SETUP GARAGE</h1>
+		<h1 style="color:#ffd23f;margin:0;font-size:28px;text-shadow:0 2px 8px #000">SETUP GARAGE</h1>
 		<div style="font-size:14px;opacity:.85" id="gClass"></div>
-		<div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:560px;width:100%">
+		<button type="button" id="gOrbit" style="background:#444;color:#ffd23f;padding:10px 16px;border-radius:8px;border:1px solid #666;font-size:14px">Peek at car (orbit)</button>
+		<div class="gRow" style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:560px;width:100%">
 			<div style="background:rgba(255,255,255,.08);padding:14px 18px;border-radius:10px;min-width:260px;width:100%;max-width:340px">
 				<div style="font-weight:bold;margin-bottom:8px;color:#ffd23f">Weight Bias</div>
 				<div style="font-size:12px;opacity:.8;margin-bottom:8px">Left heavy bites left corners harder</div>
@@ -2161,7 +2162,7 @@ const truckBody = (() => {
 			let hitFlashT = 0;
 			let garageG = null;
 			let garageCar = null;
-			let garageOrbit = { theta: 0.6, phi: 0.35, dist: 9, dragging: false, lx: 0, ly: 0 };
+			let garageOrbit = { theta: 0.6, phi: 0.35, dist: 9, dragging: false, lx: 0, ly: 0, peek: false };
 			const GARAGE_POS = { x: 0, y: 0, z: 0 }; // set when built
 
 			function makeCarData(i, col, n) {
@@ -2356,8 +2357,8 @@ const truckBody = (() => {
 			addEventListener('keyup', e => K[e.code] = 0);
 			// Garage orbit camera (drag anywhere not on UI)
 			addEventListener('pointerdown', e => {
-				if (state !== 'garage') return;
-				if (e.target.closest && e.target.closest('#garage button, #garage input, #garage select')) return;
+				if (state !== 'garage' || !garageOrbit.peek) return;
+				if (e.target.closest && e.target.closest('#gOrbitChip')) return;
 				garageOrbit.dragging = true;
 				garageOrbit.lx = e.clientX;
 				garageOrbit.ly = e.clientY;
@@ -2588,16 +2589,8 @@ const truckBody = (() => {
 				document.getElementById('hud').style.display = 'none';
 				const g = document.getElementById('garage');
 				g.style.display = 'flex';
-				// let touches pass through empty overlay to orbit the car
-				g.style.pointerEvents = 'none';
-				g.querySelectorAll('#garagePanel, #garagePanel *').forEach(el => {
-					el.style.pointerEvents = 'auto';
-				});
-				// panels
-				g.querySelectorAll('div').forEach(el => {
-					if (el.id === 'garage') return;
-					el.style.pointerEvents = 'auto';
-				});
+				g.style.pointerEvents = 'auto';
+				g.scrollTop = 0;
 				document.getElementById('gClass').textContent = k === 'sprint' ? 'Sprint Car — light, fast, tail-happy' :
 					'Dirt Truck — heavy, rolls, more grip';
 				const biasEl = document.getElementById('gBias');
@@ -2724,8 +2717,39 @@ const truckBody = (() => {
 				document.getElementById('garage').style.display = 'none';
 				menu.style.display = 'flex';
 				state = 'menu';
+				garageOrbit.peek = false;
 				if (garageCar) { scene.remove(garageCar.g); garageCar = null; }
 				if (garageG) { scene.remove(garageG); garageG = null; }
+			};
+			const gOrbitBtn = document.getElementById('gOrbit');
+			if (gOrbitBtn) gOrbitBtn.onclick = (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				garageOrbit.peek = !garageOrbit.peek;
+				const panel = document.getElementById('garagePanel');
+				const g = document.getElementById('garage');
+				if (garageOrbit.peek) {
+					panel.style.display = 'none';
+					g.style.background = 'transparent';
+					g.style.pointerEvents = 'none';
+					// floating exit chip
+					let chip = document.getElementById('gOrbitChip');
+					if (!chip) {
+						chip = document.createElement('button');
+						chip.id = 'gOrbitChip';
+						chip.textContent = 'Back to setup';
+						chip.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:20;padding:12px 18px;background:#ffd23f;color:#000;border:none;border-radius:10px;font-weight:bold;font-size:15px;pointer-events:auto';
+						chip.onclick = (ev) => { ev.stopPropagation(); gOrbitBtn.onclick(ev); };
+						document.body.appendChild(chip);
+					}
+					chip.style.display = 'block';
+				} else {
+					panel.style.display = 'flex';
+					g.style.background = 'rgba(0,0,0,.88)';
+					g.style.pointerEvents = 'auto';
+					const chip = document.getElementById('gOrbitChip');
+					if (chip) chip.style.display = 'none';
+				}
 			};
 			document.getElementById('nextPhase').onclick = () => {
 				document.getElementById('res').style.display = 'none';
