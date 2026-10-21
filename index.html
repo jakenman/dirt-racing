@@ -1005,9 +1005,16 @@
 				// hood / cowl
 				add(rbox(0.92, 0.48, 1.4, 0.12), m, 0, 0.78, -0.5);
 				add(rbox(0.5, 0.14, 0.55, 0.06), m, 0, 1.05, -0.75);
-				// tail tank / fuel cell
+				// tail tank / fuel cell with straps + fill
 				add(rbox(1.05, 0.62, 1.05, 0.14), m, 0, 0.9, 1.15);
 				add(new THREE.BoxGeometry(0.9, 0.38, 0.45), blackPaint, 0, 0.82, 1.7);
+				// tank straps
+				add(new THREE.BoxGeometry(1.08, 0.04, 0.08), chrome, 0, 1.12, 0.95);
+				add(new THREE.BoxGeometry(1.08, 0.04, 0.08), chrome, 0, 1.12, 1.35);
+				// fill cap
+				add(new THREE.CylinderGeometry(0.08, 0.09, 0.06, SEG(8)), chrome, 0.25, 1.25, 1.15);
+				// vertical stabilizer plate behind tank
+				add(new THREE.BoxGeometry(0.06, 0.55, 0.4), blackPaint, 0, 1.15, 1.85);
 				// side panels + numbers
 				const dm = new THREE.MeshStandardMaterial({ map: decal(color, num, brand), roughness: 0.4, metalness: 0.18, envMapIntensity: 0.7 });
 				for (const s of [-1, 1]) {
