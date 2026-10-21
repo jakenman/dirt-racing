@@ -819,21 +819,37 @@
 				}))
 			}
 			const treadTex = cvTex(64, 256, (x, w, h) => {
-				x.fillStyle = '#181818';
+				x.fillStyle = '#141414';
 				x.fillRect(0, 0, w, h);
-				// Blocky dirt-tire tread blocks
-				for (let y = 0; y < h; y += 14) {
-					x.fillStyle = '#0a0a0a';
-					x.fillRect(2, y + 1, w * 0.42, 8);
-					x.fillRect(w * 0.56, y + 6, w * 0.42, 8);
-					x.fillStyle = '#2a2a2a';
-					x.fillRect(3, y + 2, w * 0.38, 2);
-					x.fillRect(w * 0.58, y + 7, w * 0.38, 2);
+				// Dirt tire block tread
+				for (let y = 0; y < h; y += 12) {
+					x.fillStyle = '#060606';
+					x.fillRect(2, y + 1, w * 0.44, 7);
+					x.fillRect(w * 0.54, y + 5, w * 0.44, 7);
+					x.fillStyle = '#2c2c2c';
+					x.fillRect(3, y + 2, w * 0.4, 1.5);
+					x.fillRect(w * 0.56, y + 6, w * 0.4, 1.5);
 				}
-				// Sidewall rib hint on edges
-				x.fillStyle = '#0e0e0e';
-				x.fillRect(0, 0, 3, h);
-				x.fillRect(w - 3, 0, 3, h);
+				x.fillStyle = '#0a0a0a';
+				x.fillRect(0, 0, 4, h);
+				x.fillRect(w - 4, 0, 4, h);
+			});
+			const sidewallTex = cvTex(128, 64, (x, w, h) => {
+				x.fillStyle = '#121212';
+				x.fillRect(0, 0, w, h);
+				// concentric ribs
+				for (let r = 4; r < 30; r += 5) {
+					x.strokeStyle = 'rgba(30,30,30,.8)';
+					x.lineWidth = 2;
+					x.beginPath();
+					x.arc(w / 2, h / 2, r, 0, 7);
+					x.stroke();
+				}
+				x.fillStyle = '#c8c8c8';
+				x.font = 'bold 9px Arial';
+				x.textAlign = 'center';
+				x.fillText('DIRT', w / 2, h / 2 - 4);
+				x.fillText('TRACK', w / 2, h / 2 + 8);
 			});
 			treadTex.wrapS = treadTex.wrapT = THREE.RepeatWrapping;
 			const treadM = new THREE.MeshStandardMaterial({
@@ -843,9 +859,10 @@
 					envMapIntensity: 0.1
 				}),
 				sideM = new THREE.MeshStandardMaterial({
-					color: 0x151515,
-					roughness: 0.9,
-					metalness: 0.03,
+					map: sidewallTex,
+					color: 0xffffff,
+					roughness: 0.88,
+					metalness: 0.04,
 					envMapIntensity: 0.12
 				});
 			const WG = {};
