@@ -1020,12 +1020,18 @@
 				add(new THREE.BoxGeometry(0.48, 0.08, 0.6), chrome, 0, 1.24, -1.2);
 				for (const s of [-1, 1]) {
 					add(new THREE.BoxGeometry(0.14, 0.1, 0.55), alum, s * 0.24, 1.22, -1.2);
-					// injector stacks
+					// injector stacks with velocity stacks
 					for (let i = 0; i < 4; i++) {
-						add(new THREE.CylinderGeometry(0.035, 0.04, 0.16, 6), blackPaint, s * 0.18, 1.38, -1.45 + i * 0.14);
+						add(new THREE.CylinderGeometry(0.038, 0.032, 0.12, 6), blackPaint, s * 0.18, 1.36, -1.45 + i * 0.14);
+						add(new THREE.CylinderGeometry(0.05, 0.038, 0.06, 6), chrome, s * 0.18, 1.46, -1.45 + i * 0.14);
 					}
 				}
-				add(new THREE.CylinderGeometry(0.11, 0.13, 0.2, SEG(10)), blackPaint, 0, 1.4, -1.2);
+				// distributor / coil pack
+				add(new THREE.CylinderGeometry(0.07, 0.08, 0.14, SEG(8)), blackPaint, 0, 1.42, -0.95);
+				add(new THREE.CylinderGeometry(0.11, 0.13, 0.18, SEG(10)), blackPaint, 0, 1.4, -1.25);
+				// oil tank
+				add(new THREE.CylinderGeometry(0.12, 0.12, 0.35, SEG(8)), alum, -0.55, 0.95, -0.55);
+				add(new THREE.CylinderGeometry(0.04, 0.04, 0.08, 6), chrome, -0.55, 1.16, -0.55);
 				// 4-into-1 headers → side dump
 				for (const s of [-1, 1]) {
 					for (let i = 0; i < 4; i++) {
