@@ -1064,8 +1064,14 @@
 				g.add(wing);
 				const wp = new THREE.Mesh(rbox(2.15, 0.06, 2.4, 0.03), m);
 				wing.add(wp);
-				// trailing edge lip
-				wing.add(new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.12, 0.08), m).translateZ(1.15).translateY(0.04));
+				// trailing edge lip + leading edge
+				wing.add(new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.14, 0.09), m).translateZ(1.16).translateY(0.05));
+				wing.add(new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.08, 0.06), m).translateZ(-1.16).translateY(0.02));
+				// center spine + cross ribs under wing
+				wing.add(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 2.3), blackPaint).translateY(-0.04));
+				for (let i = -2; i <= 2; i++) {
+					wing.add(new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.03, 0.04), blackPaint).translateZ(i * 0.45).translateY(-0.035));
+				}
 				const wd = new THREE.MeshStandardMaterial({ map: decal(color, num, brand), side: THREE.DoubleSide, roughness: 0.38, metalness: 0.16, envMapIntensity: 0.7 });
 				for (const s of [-1, 1]) {
 					const b = new THREE.Mesh(new THREE.PlaneGeometry(2.45, 1.35), wd);
