@@ -952,9 +952,24 @@
 			}
 
 			function driver(g, x, y, z, color) {
-				const t = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.35, 3, SEG(8)), mat(0x2244aa));
+				// suit
+				const t = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.38, 3, SEG(8)), mat(0x1a3a8a));
 				t.position.set(x, y, z);
 				g.add(t);
+				// shoulders
+				g.add(new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 5), mat(0x1a3a8a)).translateX(x - 0.22).translateY(y + 0.15).translateZ(z));
+				g.add(new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 5), mat(0x1a3a8a)).translateX(x + 0.22).translateY(y + 0.15).translateZ(z));
+				// arms on wheel
+				const armL = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.25, 2, 5), mat(0x1a3a8a));
+				armL.position.set(x - 0.28, y + 0.05, z - 0.2);
+				armL.rotation.z = 0.5;
+				armL.rotation.x = 0.6;
+				g.add(armL);
+				const armR = armL.clone();
+				armR.position.x = x + 0.28;
+				armR.rotation.z = -0.5;
+				g.add(armR);
+				// helmet
 				const h = new THREE.Mesh(new THREE.SphereGeometry(0.24, SEG(14), SEG(10)), mat(color));
 				h.position.set(x, y + 0.48, z);
 				g.add(h);
@@ -962,6 +977,8 @@
 					.PI * 0.35, Math.PI * 0.25), mat(0x111111));
 				v.position.copy(h.position);
 				g.add(v);
+				// visor strip
+				g.add(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 0.08), mat(0x222)).translateX(x).translateY(y + 0.48).translateZ(z - 0.2));
 				return h
 			}
 
