@@ -3061,36 +3061,45 @@ const truckBody = (() => {
 				document.getElementById('fpHud').style.display = 'none';
 				document.getElementById('fpModal').style.display = 'none';
 				if (fp.legs) { scene.remove(fp.legs); fp.legs = null; }
-				// Wipe any leftover race cars so we don't get doubles on the oval
 				clearCars();
 				player = null;
 				clearDriveFollowers();
-				driveCar = garageCar;
-				garageCar = null;
-				if (!driveCar) {
-					state = 'menu';
-					initRace();
-					return;
+				// Always ensure garage building exists
+				if (!garageG) buildGarageWorld();
+				// Always ensure a car to drive out (rebuild if missing)
+				if (garageCar) {
+					driveCar = garageCar;
+					garageCar = null;
+				} else {
+					const col = PLAYER_SETUP.color;
+					const num = PLAYER_SETUP.num || '1';
+					const liv = PLAYER_SETUP.livery || 0;
+					driveCar = cls === 'truck' ? makeTruck(col, num) : makeCar(col, num, liv);
+					scene.add(driveCar.g);
 				}
 				const rig = driveCar.g.getObjectByName('driverRig');
 				if (rig) rig.visible = true;
 				if (driveCar.helmet) driveCar.helmet.visible = true;
-				driveCar.g.position.set(GARAGE_POS.x, 0.15, GARAGE_POS.z - 1);
+				driveCar.g.position.set(GARAGE_POS.x, 0.2, GARAGE_POS.z - 1);
 				driveCar.g.rotation.y = 0;
 				driveT = 0;
 				drivePhase = 0;
 				drivePathS = getStartS();
-				// Hard-set overhead cam (no lerp fight on first frames)
-				driveCamPos.set(GARAGE_POS.x + 35, 55, GARAGE_POS.z + 30);
-				driveCamLook.set(GARAGE_POS.x, 2, GARAGE_POS.z + 6);
+				// FORCE overhead camera immediately
+				driveCamPos.set(GARAGE_POS.x + 45, 65, GARAGE_POS.z + 40);
+				driveCamLook.set(GARAGE_POS.x, 3, GARAGE_POS.z + 8);
 				cam.position.set(driveCamPos.x, driveCamPos.y, driveCamPos.z);
 				cam.up.set(0, 1, 0);
 				cam.lookAt(driveCamLook.x, driveCamLook.y, driveCamLook.z);
-				cam.fov = 48;
+				cam.fov = 45;
 				cam.near = 1;
-				cam.far = 900;
+				cam.far = 1200;
 				cam.updateProjectionMatrix();
 				state = 'driveToTrack';
+				window.__cineCam = {
+					cx: driveCamPos.x, cy: driveCamPos.y, cz: driveCamPos.z,
+					lx: driveCamLook.x, ly: driveCamLook.y, lz: driveCamLook.z
+				};
 				msg.textContent = 'Garage door opening…';
 				msg.style.display = 'block';
 			}
@@ -3110,7 +3119,9 @@ const truckBody = (() => {
 					scene.remove(garageG);
 					garageG = null;
 				}
+				window.__cineCam = null;
 				msg.textContent = '';
+				msg.style.display = '';
 				initRace();
 			}
 
@@ -3796,112 +3807,106 @@ const truckBody = (() => {
 						m.material.opacity = Math.max(0, m.life * 0.42);
 						if (m.life <= 0) m.visible = false;
 					}
-				// Blimp-angle cinematic: door → out → onto oval → pack follows
-				if (state === 'driveToTrack' && driveCar) {
+				// EXIT CINEMATIC — owns camera completely while state === driveToTrack
+				if (state === 'driveToTrack') {
 					driveT += dt;
-					const dL = garageG && garageG.userData.doorL;
-					const dR = garageG && garageG.userData.doorR;
-					let targetCam = driveCamPos.clone();
-					let targetLook = driveCamLook.clone();
-					let carX = driveCar.g.position.x, carZ = driveCar.g.position.z, carH = driveCar.g.rotation.y;
-
-					if (driveT < 2.2) {
-						// PHASE 0 — doors open, high wide shot of the shed
-						drivePhase = 0;
-						const u = Math.min(1, driveT / 2.2);
-						const e = u * u * (3 - 2 * u);
-						const ang = e * Math.PI * 0.95;
-						if (dL) dL.rotation.y = ang;
-						if (dR) dR.rotation.y = -ang;
-						msg.textContent = 'Garage door opening…';
-						msg.style.display = 'block';
-						targetCam.set(GARAGE_POS.x + 40, 60, GARAGE_POS.z + 35);
-						targetLook.set(GARAGE_POS.x, 2, GARAGE_POS.z + 6);
-						carX = GARAGE_POS.x;
-						carZ = GARAGE_POS.z - 1;
-						carH = 0;
-					} else if (driveT < 4.5) {
-						// PHASE 1 — car rolls out the door toward the oval
-						drivePhase = 1;
-						if (dL) dL.rotation.y = Math.PI * 0.95;
-						if (dR) dR.rotation.y = -Math.PI * 0.95;
-						msg.textContent = 'Pulling out…';
-						const u = Math.min(1, (driveT - 2.2) / 2.3);
-						const e = u * u * (3 - 2 * u);
-						const ss = getStartS();
-						const entry = cl(ss, 0);
-						const fromX = GARAGE_POS.x, fromZ = GARAGE_POS.z - 1;
-						const midX = GARAGE_POS.x, midZ = GARAGE_POS.z + 18;
-						// two-segment path: to outside door, then toward track entry
-						let x, z;
-						if (e < 0.45) {
-							const t = e / 0.45;
-							x = fromX + (midX - fromX) * t;
-							z = fromZ + (midZ - fromZ) * t;
-						} else {
-							const t = (e - 0.45) / 0.55;
-							x = midX + (entry.x - midX) * t;
-							z = midZ + (entry.z - midZ) * t;
-						}
-						carX = x; carZ = z;
-						carH = Math.atan2(entry.x - fromX, entry.z - fromZ) + Math.PI;
-						targetCam.set(x + 35, 50, z + 32);
-						targetLook.set(x, 1.5, z);
+					if (!driveCar) {
+						finishDriveToTrack();
 					} else {
-						// PHASE 2 — on the clay, lead the field around a stretch of the oval
-						drivePhase = 2;
-						msg.textContent = 'First one on track…';
-						const lapT = driveT - 4.5;
-						const speed = 28; // world units / sec along spline
-						drivePathS = ((getStartS() + speed * lapT) % PER + PER) % PER;
-						const pos = cl(drivePathS, 0);
-						carX = pos.x; carZ = pos.z;
-						carH = Math.atan2(pos.tx, pos.tz) + Math.PI;
-						targetCam.set(carX + pos.nx * 12 + pos.tx * -28, 48, carZ + pos.nz * 12 + pos.tz * -28);
-						targetLook.set(carX, 1.2, carZ);
-						// Spawn pack behind the leader once
-						if (driveFollowers.length === 0 && COLORS && COLORS.length) {
-							const nFollow = Math.min(6, COLORS.length - 1);
-							for (let i = 0; i < nFollow; i++) {
-								const [col, num] = COLORS[i + 1] || COLORS[i];
-								const mesh = cls === 'truck' ? makeTruck(col, String(num)) : makeCar(col, String(num), 0);
-								const rig = mesh.g.getObjectByName('driverRig');
-								if (rig) rig.visible = true;
-								scene.add(mesh.g);
-								driveFollowers.push({ mesh, lag: 14 + i * 11, lane: (i % 2 ? 3.5 : -3.5) });
+						const dL = garageG && garageG.userData.doorL;
+						const dR = garageG && garageG.userData.doorR;
+						let carX = GARAGE_POS.x, carZ = GARAGE_POS.z - 1, carH = 0;
+						let cx = GARAGE_POS.x + 45, cy = 65, cz = GARAGE_POS.z + 40;
+						let lx = GARAGE_POS.x, ly = 3, lz = GARAGE_POS.z + 8;
+
+						if (driveT < 2.5) {
+							// Doors swing open — fixed overhead
+							const u = Math.min(1, driveT / 2.5);
+							const e = u * u * (3 - 2 * u);
+							if (dL) dL.rotation.y = e * 1.6;
+							if (dR) dR.rotation.y = -e * 1.6;
+							msg.textContent = 'Garage door opening…';
+							msg.style.display = 'block';
+							carX = GARAGE_POS.x;
+							carZ = GARAGE_POS.z - 1;
+							carH = 0;
+							cx = GARAGE_POS.x + 45; cy = 65; cz = GARAGE_POS.z + 40;
+							lx = GARAGE_POS.x; ly = 4; lz = GARAGE_POS.z + 10;
+						} else if (driveT < 5.5) {
+							// Roll out through the door
+							if (dL) dL.rotation.y = 1.6;
+							if (dR) dR.rotation.y = -1.6;
+							msg.textContent = 'Pulling out…';
+							const u = Math.min(1, (driveT - 2.5) / 3.0);
+							const e = u * u * (3 - 2 * u);
+							const ss = getStartS();
+							const entry = cl(ss, 0);
+							const x0 = GARAGE_POS.x, z0 = GARAGE_POS.z - 1;
+							const x1 = GARAGE_POS.x, z1 = GARAGE_POS.z + 16;
+							if (e < 0.4) {
+								const t = e / 0.4;
+								carX = x0 + (x1 - x0) * t;
+								carZ = z0 + (z1 - z0) * t;
+							} else {
+								const t = (e - 0.4) / 0.6;
+								carX = x1 + (entry.x - x1) * t;
+								carZ = z1 + (entry.z - z1) * t;
+							}
+							carH = Math.atan2(entry.x - x0, entry.z - z0);
+							cx = carX + 38; cy = 55; cz = carZ + 38;
+							lx = carX; ly = 2; lz = carZ;
+						} else {
+							// On the oval — lead the field
+							msg.textContent = 'First one on track…';
+							if (dL) dL.rotation.y = 1.6;
+							if (dR) dR.rotation.y = -1.6;
+							const lapT = driveT - 5.5;
+							const speed = 26;
+							drivePathS = ((getStartS() + speed * lapT) % PER + PER) % PER;
+							const pos = cl(drivePathS, 0);
+							carX = pos.x; carZ = pos.z;
+							carH = Math.atan2(pos.tx, pos.tz);
+							cx = carX - pos.tx * 30 + pos.nx * 15;
+							cy = 50;
+							cz = carZ - pos.tz * 30 + pos.nz * 15;
+							lx = carX; ly = 1.5; lz = carZ;
+							if (driveFollowers.length === 0) {
+								const nFollow = Math.min(6, COLORS.length - 1);
+								for (let i = 0; i < nFollow; i++) {
+									const [col, num] = COLORS[i + 1] || [0xffffff, String(i + 2)];
+									const mesh = cls === 'truck' ? makeTruck(col, String(num)) : makeCar(col, String(num), 0);
+									const r = mesh.g.getObjectByName('driverRig');
+									if (r) r.visible = true;
+									scene.add(mesh.g);
+									driveFollowers.push({ mesh, lag: 16 + i * 12, lane: (i % 2 ? 3.2 : -3.2) });
+								}
+							}
+							for (const f of driveFollowers) {
+								const s = ((drivePathS - f.lag) % PER + PER) % PER;
+								const p = cl(s, f.lane);
+								f.mesh.g.position.set(p.x, 0.15, p.z);
+								f.mesh.g.rotation.y = Math.atan2(p.tx, p.tz);
+							}
+							if (speed * lapT > PER * 0.5) {
+								driveCar.g.position.set(carX, 0.15, carZ);
+								driveCar.g.rotation.y = carH;
+								finishDriveToTrack();
+								// fall through — finish changes state
 							}
 						}
-						for (const f of driveFollowers) {
-							const s = ((drivePathS - f.lag) % PER + PER) % PER;
-							const p = cl(s, f.lane);
-							f.mesh.g.position.set(p.x, 0.15, p.z);
-							f.mesh.g.rotation.y = Math.atan2(p.tx, p.tz) + Math.PI;
-						}
-						// ~half a lap of lead then race
-						if (speed * lapT > PER * 0.55) {
-							finishDriveToTrack();
-							return;
+						if (state === 'driveToTrack' && driveCar) {
+							driveCar.g.position.set(carX, 0.15, carZ);
+							driveCar.g.rotation.y = carH;
+							window.__cineCam = { cx, cy, cz, lx, ly, lz };
+							cam.position.set(cx, cy, cz);
+							cam.up.set(0, 1, 0);
+							cam.lookAt(lx, ly, lz);
+							cam.fov = 45;
+							cam.near = 1;
+							cam.far = 1200;
+							cam.updateProjectionMatrix();
 						}
 					}
-
-					driveCar.g.position.set(carX, 0.15, carZ);
-					driveCar.g.rotation.y = carH;
-					// Phase 0: hard snap overhead. Later: slow lerp only (no shake)
-					if (drivePhase === 0) {
-						driveCamPos.copy(targetCam);
-						driveCamLook.copy(targetLook);
-					} else {
-						const k = Math.min(1, dt * 1.4);
-						driveCamPos.lerp(targetCam, k);
-						driveCamLook.lerp(targetLook, k);
-					}
-					cam.position.set(driveCamPos.x, driveCamPos.y, driveCamPos.z);
-					cam.up.set(0, 1, 0);
-					cam.lookAt(driveCamLook.x, driveCamLook.y, driveCamLook.z);
-					cam.fov = 48;
-					cam.near = 1;
-					cam.far = 900;
-					cam.updateProjectionMatrix();
 				}
 				// FP garage movement + stations
 				if (state === 'garage' && garageG) {
@@ -4079,7 +4084,7 @@ const truckBody = (() => {
 				}
 				// Speed pressure vignette + hit flash (game feel, not a video)
 				const sl = document.getElementById('speedLines');
-				if (sl) sl.style.opacity = state === 'race' ? String(Math.min(0.85, Math.hypot(player.vx, player.vz) / 45)) : '0';
+				if (sl) sl.style.opacity = (state === 'race' && player) ? String(Math.min(0.85, Math.hypot(player.vx, player.vz) / 45)) : '0';
 				if (hitFlashT > 0) {
 					hitFlashT -= dt;
 					const hf = document.getElementById('hitFlash');
@@ -4087,6 +4092,15 @@ const truckBody = (() => {
 						if (hitFlashT > 0) hf.classList.add('on');
 						else hf.classList.remove('on');
 					}
+				}
+				// Absolute last word on camera during exit cinematic
+				if (state === 'driveToTrack' && window.__cineCam) {
+					const C = window.__cineCam;
+					cam.position.set(C.cx, C.cy, C.cz);
+					cam.up.set(0, 1, 0);
+					cam.lookAt(C.lx, C.ly, C.lz);
+					cam.fov = 45;
+					cam.updateProjectionMatrix();
 				}
 				ren.render(scene, cam)
 			}
