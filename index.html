@@ -1259,6 +1259,7 @@
 				add(new THREE.BoxGeometry(0.48, 0.55, 0.14), blackPaint, 0, 1.18, 0.48);
 				// --- TALL top wing (signature WoO look) ---
 				const wing = new THREE.Group();
+				wing.name = 'wing';
 				wing.position.set(0, 2.55, 0.15);
 				g.add(wing);
 				const wp = new THREE.Mesh(rbox(2.15, 0.06, 2.4, 0.03), m);
@@ -2161,6 +2162,40 @@ const truckBody = (() => {
 			};
 			const GARAGE_WALL_COLORS = [0x4a4a52, 0x5c4030, 0x3a4a5c, 0x4a5c3a, 0x5c3a3a, 0x2a2a30];
 			const GARAGE_FLOOR_COLORS = [0x3d3d44, 0x2a2a30, 0x5a4030, 0x1a3a5c, 0x3a1a1a, 0x1a4a2a];
+			// Season points board (persists in localStorage)
+			function loadStandings() {
+				try {
+					const raw = localStorage.getItem('dirtStandings');
+					if (raw) return JSON.parse(raw);
+				} catch (e) {}
+				return NAMES.map((name, i) => ({
+					name: i === 0 ? 'You' : name,
+					num: i === 0 ? (PLAYER_SETUP.num || '1') : String(COLORS[i] && COLORS[i][1] || i),
+					points: 0
+				}));
+			}
+			function saveStandings(list) {
+				try { localStorage.setItem('dirtStandings', JSON.stringify(list)); } catch (e) {}
+			}
+			let SEASON = loadStandings();
+			function awardFeaturePoints(order) {
+				// Classic dirt points: 10, 9, 8... for feature finish
+				order.forEach((car, i) => {
+					const pts = Math.max(1, 11 - i);
+					const num = String(car.num || PLAYER_SETUP.num || '?');
+					const name = car.name || (car.ai ? 'Driver' : 'You');
+					let row = SEASON.find(r => r.name === name);
+					if (!row) {
+						row = { name, num, points: 0 };
+						SEASON.push(row);
+					}
+					row.num = num;
+					row.points = (row.points || 0) + pts;
+					car.nightPoints = pts;
+				});
+				SEASON.sort((a, b) => b.points - a.points);
+				saveStandings(SEASON);
+			}
 			const LIVERIES = [
 				{ id: 0, name: 'Solid', desc: 'Full body color' },
 				{ id: 1, name: 'Stripes', desc: 'Bold racing stripes' },
@@ -2195,6 +2230,8 @@ const truckBody = (() => {
 				const skillBase = [0, 0.99, 0.985, 0.98, 0.975, 0.97, 0.965, 0.96, 0.955, 0.95][i] || 0.94;
 				return {
 					i,
+					id: i,
+					num: String(useNum),
 					name: isP ? 'You' : NAMES[i],
 					ai: !isP,
 					mesh: null,
@@ -2790,8 +2827,79 @@ const truckBody = (() => {
 				makeStation('bias', 'WEIGHT', 0, -9, 0x2a9d3f);
 				makeStation('walls', 'WALLS', -12, 2, 0x9a8a6a);
 				makeStation('floor', 'FLOOR', 12, 2, 0x888888);
-				makeStation('door', 'RACE →', 0, 12.5, 0xffd23f);
+				// Race poles beside the door (not blocking the opening)
+				makeStation('quick', 'QUICK', -5.5, 12.5, 0x66aaee);
+				makeStation('full', 'FULL SHOW', 5.5, 12.5, 0xffd23f);
+				// Points board on the wall behind the poles
+				buildPointsBoard(garageG);
 				scene.add(garageG);
+			}
+
+			function buildPointsBoard(root) {
+				const cv = document.createElement('canvas');
+				cv.width = 512;
+				cv.height = 640;
+				const tex = new THREE.CanvasTexture(cv);
+				tex.anisotropy = 2;
+				const mat = new THREE.MeshBasicMaterial({ map: tex });
+				const board = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 6.8), mat);
+				board.position.set(0, 3.6, 12.2);
+				board.rotation.y = Math.PI; // face into the garage
+				board.name = 'pointsBoard';
+				root.add(board);
+				// frame
+				const frame = new THREE.Mesh(
+					new THREE.BoxGeometry(5.8, 7.1, 0.12),
+					new THREE.MeshStandardMaterial({ color: 0x2a2a28, roughness: 0.7, metalness: 0.2 })
+				);
+				frame.position.set(0, 3.6, 12.28);
+				root.add(frame);
+				root.userData.pointsBoard = board;
+				root.userData.pointsCanvas = cv;
+				root.userData.pointsTex = tex;
+				paintPointsBoard();
+			}
+
+			function paintPointsBoard() {
+				if (!garageG || !garageG.userData.pointsCanvas) return;
+				const cv = garageG.userData.pointsCanvas;
+				const x = cv.getContext('2d');
+				const w = cv.width, h = cv.height;
+				x.fillStyle = '#1a1a18';
+				x.fillRect(0, 0, w, h);
+				x.fillStyle = '#ffd23f';
+				x.font = 'bold 36px Arial';
+				x.textAlign = 'center';
+				x.fillText('NIGHT POINTS', w / 2, 48);
+				x.fillStyle = '#888';
+				x.font = '18px Arial';
+				x.fillText('Full Program standings', w / 2, 78);
+				x.strokeStyle = '#ffd23f';
+				x.lineWidth = 2;
+				x.beginPath();
+				x.moveTo(40, 95);
+				x.lineTo(w - 40, 95);
+				x.stroke();
+				const list = (SEASON || []).slice().sort((a, b) => b.points - a.points);
+				x.textAlign = 'left';
+				list.forEach((row, i) => {
+					const y = 130 + i * 48;
+					if (y > h - 30) return;
+					const rank = i + 1;
+					x.fillStyle = rank === 1 ? '#ffd23f' : rank === 2 ? '#ccc' : rank === 3 ? '#c47a3a' : '#ddd';
+					x.font = 'bold 26px Arial';
+					x.fillText('#' + rank, 36, y);
+					x.fillStyle = '#fff';
+					x.font = '24px Arial';
+					const label = (row.name || 'Driver') + '  ·  #' + (row.num || '?');
+					x.fillText(label, 110, y);
+					x.fillStyle = '#ffd23f';
+					x.font = 'bold 26px Arial';
+					x.textAlign = 'right';
+					x.fillText(String(row.points || 0) + ' pts', w - 36, y);
+					x.textAlign = 'left';
+				});
+				if (garageG.userData.pointsTex) garageG.userData.pointsTex.needsUpdate = true;
 			}
 
 			function fpWorldFromLocal(lx, lz) {
@@ -2939,6 +3047,9 @@ const truckBody = (() => {
 				buildGarageWorld();
 				spawnGarageCar();
 				buildFpLegs();
+				SEASON = loadStandings();
+				if (SEASON[0]) SEASON[0].num = PLAYER_SETUP.num || '1';
+				paintPointsBoard();
 				// Start near door, facing the car (toward -Z)
 				const start = fpWorldFromLocal(0, 8);
 				fp.x = start.x;
@@ -2953,7 +3064,7 @@ const truckBody = (() => {
 				fp.near = null;
 				fp.tipUntil = performance.now() + 10000;
 				const pr0 = document.getElementById('fpPrompt');
-				pr0.textContent = 'Walk to COLOR · NUMBER · WEIGHT stations — door to race';
+				pr0.textContent = 'Walk to stations · QUICK or FULL SHOW at the door';
 				pr0.style.display = 'block';
 				document.getElementById('fpUse').style.display = 'none';
 			}
@@ -3064,20 +3175,24 @@ const truckBody = (() => {
 						}
 						if (e.target.id === 'fpModalClose') closeFpModal();
 					};
-				} else if (st.id === 'door') {
-					openFpModal(`<h2 style="color:#ffd23f;margin:0 0 12px">Race Night</h2>
-						<p style="font-size:13px;opacity:.85;margin-bottom:12px">${cls==='sprint'?'Sprint Car':'Dirt Truck'} · #${PLAYER_SETUP.num||'1'}</p>
-						<button type="button" id="fpQuick" style="width:100%;margin-bottom:8px;background:#666;color:#fff;padding:14px;border:none;border-radius:8px;font-size:15px">Quick Race (10 laps)</button>
-						<button type="button" id="fpFull" style="width:100%;background:#ffd23f;color:#000;padding:14px;border:none;border-radius:8px;font-size:15px;font-weight:bold">Full Program — Heats + Feature</button>
+				} else if (st.id === 'quick') {
+					openFpModal(`<h2 style="color:#66aaee;margin:0 0 12px">Quick Race</h2>
+						<p style="font-size:13px;opacity:.85;margin-bottom:12px">10-lap feature only · ${cls==='sprint'?'Sprint':'Truck'} #${PLAYER_SETUP.num||'1'}</p>
+						<button type="button" id="fpGoQuick" style="width:100%;background:#66aaee;color:#000;padding:14px;border:none;border-radius:8px;font-size:15px;font-weight:bold">Start Quick Race</button>
 						<button type="button" id="fpModalClose" style="margin-top:12px;width:100%;background:#333;color:#fff;padding:10px;border:none;border-radius:8px">Stay in garage</button>`);
-					const goQuick = (e) => { if (e) { e.preventDefault(); e.stopPropagation(); } closeFpModal(); applySetup(); startDriveToTrack('quick'); };
-					const goFull = (e) => { if (e) { e.preventDefault(); e.stopPropagation(); } closeFpModal(); applySetup(); startDriveToTrack('full'); };
-					const fq = document.getElementById('fpQuick');
-					const ff = document.getElementById('fpFull');
-					fq.onclick = goQuick;
-					ff.onclick = goFull;
-					fq.ontouchend = goQuick;
-					ff.ontouchend = goFull;
+					const go = (e) => { if (e) { e.preventDefault(); e.stopPropagation(); } closeFpModal(); applySetup(); startDriveToTrack('quick'); };
+					document.getElementById('fpGoQuick').onclick = go;
+					document.getElementById('fpGoQuick').ontouchend = go;
+					document.getElementById('fpModalClose').onclick = closeFpModal;
+				} else if (st.id === 'full') {
+					openFpModal(`<h2 style="color:#ffd23f;margin:0 0 12px">Full Program</h2>
+						<p style="font-size:13px;opacity:.85;margin-bottom:8px">Heat 1 (you) → Heat 2 (sim) → Feature with inverted lineup. Points go on the board.</p>
+						<p style="font-size:12px;opacity:.7;margin-bottom:12px">${cls==='sprint'?'Sprint':'Truck'} #${PLAYER_SETUP.num||'1'}</p>
+						<button type="button" id="fpGoFull" style="width:100%;background:#ffd23f;color:#000;padding:14px;border:none;border-radius:8px;font-size:15px;font-weight:bold">Start Full Show</button>
+						<button type="button" id="fpModalClose" style="margin-top:12px;width:100%;background:#333;color:#fff;padding:10px;border:none;border-radius:8px">Stay in garage</button>`);
+					const go = (e) => { if (e) { e.preventDefault(); e.stopPropagation(); } closeFpModal(); applySetup(); startDriveToTrack('full'); };
+					document.getElementById('fpGoFull').onclick = go;
+					document.getElementById('fpGoFull').ontouchend = go;
 					document.getElementById('fpModalClose').onclick = closeFpModal;
 				}
 			}
@@ -3493,11 +3608,57 @@ const truckBody = (() => {
 					puff(c.x, 0.4, c.z, 0.45);
 					puff(c.x + side * 0.5, 0.5, c.z, 0.3);
 				}
-				for (const p of c.mesh.parts) {
-					p.base = p.base || p.o.rotation.clone();
-					p.o.rotation.set(p.base.x + p.r[0] * c.dmg * side, p.base.y + p.r[1] * c.dmg * side, p.base.z + p.r[
-						2] * c.dmg * side)
+				updateDamageVisuals(c, side);
+			}
+
+			function updateDamageVisuals(c, side) {
+				if (!c.mesh || !c.mesh.g) return;
+				const d = c.dmg || 0;
+				const pull = c.pull || 0;
+				const s = side != null ? side : (pull >= 0 ? 1 : -1);
+				// Bent body parts
+				if (c.mesh.parts) {
+					for (const p of c.mesh.parts) {
+						p.base = p.base || p.o.rotation.clone();
+						p.basePos = p.basePos || p.o.position.clone();
+						p.o.rotation.set(
+							p.base.x + p.r[0] * d * s,
+							p.base.y + p.r[1] * d * s,
+							p.base.z + p.r[2] * d * s
+						);
+						// shift panels as damage stacks
+						p.o.position.set(
+							p.basePos.x + s * d * 0.08,
+							p.basePos.y - d * 0.05,
+							p.basePos.z + (Math.random() - 0.5) * d * 0.02
+						);
+					}
 				}
+				// Wing crumple / droop
+				const wing = c.mesh.g.getObjectByName('wing') || (c.mesh.parts && c.mesh.parts[0] && c.mesh.parts[0].o);
+				if (wing && wing.scale) {
+					wing.scale.y = Math.max(0.35, 1 - d * 0.55);
+					wing.rotation.z = pull * d * 0.5;
+				}
+				// Smoke / steam marker intensity via userData for loop
+				c.mesh.dmgLevel = d;
+				c.mesh.dmgSide = s;
+				// Darken body materials slightly when wrecked
+				c.mesh.g.traverse(o => {
+					if (!o.isMesh || !o.material || o.name === 'driverRig') return;
+					const mats = Array.isArray(o.material) ? o.material : [o.material];
+					for (const m of mats) {
+						if (!m.color || !m.userData) continue;
+						if (m.userData.baseColor == null && m.color) {
+							m.userData.baseColor = m.color.getHex();
+						}
+						if (m.userData.baseColor != null) {
+							const base = new THREE.Color(m.userData.baseColor);
+							base.multiplyScalar(1 - d * 0.35);
+							m.color.copy(base);
+						}
+					}
+				});
 			}
 
 			function collideCars() {
@@ -3907,10 +4068,14 @@ const truckBody = (() => {
 						});
 						document.getElementById('rt').innerHTML = html
 					} else {
+						if (raceMode === 'full') {
+							awardFeaturePoints(order);
+							paintPointsBoard();
+						}
 						document.getElementById('resTitle').textContent = raceMode === 'full' ?
 							'FEATURE RESULTS — Night Complete!' : 'Race Results';
 						document.getElementById('resSub').textContent = raceMode === 'full' ?
-							'What a battle. See you next week.' : '';
+							'Points updated on the garage board. See you next week.' : '';
 						document.getElementById('nextPhase').style.display = 'none';
 						document.getElementById('again').style.display = 'block';
 						document.getElementById('again').textContent = 'Restart Race';
@@ -3930,7 +4095,7 @@ const truckBody = (() => {
 					c.mesh.g.position.set(c.x, y, c.z);
 					c.mesh.g.rotation.order = 'YXZ';
 					c.mesh.g.rotation.set(0, c.h + Math.PI, c.roll);
-					if (c.dmg > 0.35 && Math.random() < c.dmg * dt * 25) puff(c.x - Math.sin(c.h) * 1.5, y + 1.2, c.z -
+					if (c.dmg > 0.15 && Math.random() < c.dmg * dt * (18 + c.dmg * 30)) puff(c.x - Math.sin(c.h) * 1.5, y + 1.2, c.z -
 						Math.cos(c.h) * 1.5, 0.3 + 0.5 * c.dmg);
 					const sp = Math.hypot(c.vx, c.vz);
 					// Roost + rubber marks tied to rear wheels
@@ -4009,15 +4174,23 @@ const truckBody = (() => {
 					const ub = document.getElementById('fpUse');
 					if (best) {
 						pr.style.display = 'block';
-						pr.textContent = best.id === 'door' ? 'Race options' : ('Change ' + best.label);
+						if (best.id === 'quick') {
+							pr.textContent = 'Quick Race (10 laps)';
+							ub.textContent = 'Start Quick Race';
+						} else if (best.id === 'full') {
+							pr.textContent = 'Full Program — Heats + Feature';
+							ub.textContent = 'Start Full Show';
+						} else {
+							pr.textContent = 'Change ' + best.label;
+							ub.textContent = 'Use ' + best.label;
+						}
 						ub.style.display = 'block';
-						ub.textContent = best.id === 'door' ? 'Open race menu' : ('Use ' + best.label);
 					} else {
 						ub.style.display = 'none';
 						// Intro tip fades after ~10s so the view stays clean
 						if (performance.now() < fp.tipUntil) {
 							pr.style.display = 'block';
-							pr.textContent = 'Walk to COLOR · NUMBER · WEIGHT stations — door to race';
+							pr.textContent = 'Walk to stations · QUICK or FULL SHOW at the door';
 						} else {
 							pr.style.display = 'none';
 							pr.textContent = '';
