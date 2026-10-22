@@ -3802,7 +3802,7 @@ const truckBody = (() => {
 						for (const c of cars) progress(c)
 					}
 				}
-				if (state === 'race' && player.done) {
+				if (state === 'race' && player && player.done) {
 					state = 'fin';
 					tState = 0;
 					msg.textContent = phase === 'heat' ? 'HEAT DONE!' : 'FINISHED!';
