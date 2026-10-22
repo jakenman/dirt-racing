@@ -434,10 +434,15 @@
 	</div>
 	<div id="fpHud" style="display:none;position:fixed;inset:0;z-index:6;pointer-events:none;font-family:Arial,sans-serif">
 		<div id="fpPrompt" style="position:absolute;bottom:120px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);color:#ffd23f;padding:10px 16px;border-radius:10px;font-size:15px;text-align:center;max-width:90%;pointer-events:none"></div>
-		<button type="button" id="fpUse" style="display:none;position:absolute;bottom:56px;left:50%;transform:translateX(-50%);pointer-events:auto;background:#ffd23f;color:#000;border:none;border-radius:12px;padding:14px 28px;font-weight:bold;font-size:16px;min-width:160px">Use</button>
-		<button type="button" id="fpWalk" style="position:absolute;bottom:24px;right:18px;width:72px;height:72px;border-radius:50%;pointer-events:auto;background:rgba(255,210,63,.9);color:#000;border:3px solid #fff;font-weight:bold;font-size:13px">WALK</button>
+		<button type="button" id="fpUse" style="display:none;position:absolute;bottom:100px;left:50%;transform:translateX(-50%);pointer-events:auto;background:#ffd23f;color:#000;border:none;border-radius:12px;padding:14px 28px;font-weight:bold;font-size:16px;min-width:160px;z-index:2">Use</button>
+		<!-- Look left/right -->
+		<button type="button" id="fpLookL" style="position:absolute;bottom:28px;left:16px;width:64px;height:64px;border-radius:50%;pointer-events:auto;background:rgba(40,40,50,.92);color:#fff;border:2px solid #888;font-weight:bold;font-size:22px">◀</button>
+		<button type="button" id="fpLookR" style="position:absolute;bottom:28px;left:88px;width:64px;height:64px;border-radius:50%;pointer-events:auto;background:rgba(40,40,50,.92);color:#fff;border:2px solid #888;font-weight:bold;font-size:22px">▶</button>
+		<!-- Walk forward/back -->
+		<button type="button" id="fpWalk" style="position:absolute;bottom:100px;right:16px;width:68px;height:68px;border-radius:50%;pointer-events:auto;background:rgba(255,210,63,.95);color:#000;border:3px solid #fff;font-weight:bold;font-size:12px">FWD</button>
+		<button type="button" id="fpWalkBack" style="position:absolute;bottom:28px;right:16px;width:68px;height:68px;border-radius:50%;pointer-events:auto;background:rgba(200,180,60,.9);color:#000;border:3px solid #fff;font-weight:bold;font-size:12px">BACK</button>
 		<button type="button" id="fpBack" style="position:absolute;top:12px;left:12px;pointer-events:auto;background:rgba(0,0,0,.7);color:#fff;border:1px solid #666;border-radius:8px;padding:10px 14px;font-size:14px">← Menu</button>
-		<div style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,.55);color:#ccc;padding:6px 10px;border-radius:8px;font-size:11px;max-width:140px;text-align:right">Drag to look · Walk to stations</div>
+		<div style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,.55);color:#ccc;padding:6px 10px;border-radius:8px;font-size:11px;max-width:150px;text-align:right">◀ ▶ look · FWD/BACK walk</div>
 	</div>
 	<div id="fpModal" style="display:none;position:fixed;inset:0;z-index:7;background:rgba(0,0,0,.7);align-items:center;justify-content:center;pointer-events:auto">
 		<div id="fpModalBox" style="background:#1a1a1e;color:#fff;border-radius:14px;padding:18px;max-width:340px;width:92%;max-height:80vh;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid #444"></div>
@@ -2176,7 +2181,7 @@ const truckBody = (() => {
 			// First-person garage walk (mobile-friendly)
 			const fp = {
 				x: 0, z: 0, yaw: 0, pitch: 0,
-				walk: false, dragging: false, lx: 0, ly: 0,
+				walk: false, walkBack: false, lookL: false, lookR: false,
 				legs: null, stations: [], near: null,
 				tipUntil: 0
 			};
@@ -2372,24 +2377,11 @@ const truckBody = (() => {
 			});
 			addEventListener('keyup', e => K[e.code] = 0);
 			// Garage orbit camera (drag anywhere not on UI)
+			// Garage look uses on-screen ◀ ▶ buttons (no two-finger swipe conflict)
 			addEventListener('pointerdown', e => {
 				if (state !== 'garage') return;
-				if (e.target.closest && e.target.closest('#fpHud button, #fpModal, #fpModal *')) return;
-				fp.dragging = true;
-				fp.lx = e.clientX;
-				fp.ly = e.clientY;
+				// ignore — movement/look are button-based
 			});
-			addEventListener('pointermove', e => {
-				if (state !== 'garage' || !fp.dragging) return;
-				const dx = e.clientX - fp.lx,
-					dy = e.clientY - fp.ly;
-				fp.lx = e.clientX;
-				fp.ly = e.clientY;
-				fp.yaw -= dx * 0.0035;
-				fp.pitch = Math.max(-1.1, Math.min(0.75, fp.pitch - dy * 0.003));
-			});
-			addEventListener('pointerup', () => { fp.dragging = false; });
-			addEventListener('pointercancel', () => { fp.dragging = false; });
 			const T = {},
 				BTN = [
 					['tl', 'l'],
@@ -2839,6 +2831,7 @@ const truckBody = (() => {
 				g.style.display = 'none';
 				document.getElementById('fpHud').style.display = 'block';
 				document.getElementById('fpModal').style.display = 'none';
+				setTouchUI(false); // no gas/brake in the shop
 				document.getElementById('gClass').textContent = k === 'sprint' ? 'Sprint Car — light, fast, tail-happy' :
 					'Dirt Truck — heavy, rolls, more grip';
 				const biasEl = document.getElementById('gBias');
@@ -3142,14 +3135,25 @@ const truckBody = (() => {
 			}
 			
 			document.getElementById('fpUse').onclick = (e) => { e.preventDefault(); useFpStation(); };
-			document.getElementById('fpWalk').addEventListener('pointerdown', e => { e.preventDefault(); fp.walk = true; });
-			document.getElementById('fpWalk').addEventListener('pointerup', e => { fp.walk = false; });
-			document.getElementById('fpWalk').addEventListener('pointerleave', e => { fp.walk = false; });
-			document.getElementById('fpWalk').addEventListener('pointercancel', e => { fp.walk = false; });
+			function holdBtn(id, on, off) {
+				const el = document.getElementById(id);
+				if (!el) return;
+				const down = e => { e.preventDefault(); e.stopPropagation(); on(); };
+				const up = e => { e.preventDefault(); off(); };
+				el.addEventListener('pointerdown', down);
+				el.addEventListener('pointerup', up);
+				el.addEventListener('pointerleave', up);
+				el.addEventListener('pointercancel', up);
+			}
+			holdBtn('fpWalk', () => { fp.walk = true; }, () => { fp.walk = false; });
+			holdBtn('fpWalkBack', () => { fp.walkBack = true; }, () => { fp.walkBack = false; });
+			holdBtn('fpLookL', () => { fp.lookL = true; }, () => { fp.lookL = false; });
+			holdBtn('fpLookR', () => { fp.lookR = true; }, () => { fp.lookR = false; });
 			document.getElementById('fpBack').onclick = () => {
 				leaveFpGarage();
 				state = 'menu';
 				menu.style.display = 'flex';
+				setTouchUI(false);
 			};
 
 			document.getElementById('gQuick').onclick = () => {
@@ -3792,12 +3796,13 @@ const truckBody = (() => {
 						fp.x += Math.sin(fp.yaw) * speed * dt;
 						fp.z += Math.cos(fp.yaw) * speed * dt;
 					}
-					if (K.KeyS || K.ArrowDown) {
-						fp.x -= Math.sin(fp.yaw) * speed * 0.65 * dt;
-						fp.z -= Math.cos(fp.yaw) * speed * 0.65 * dt;
+					if (fp.walkBack || K.KeyS || K.ArrowDown) {
+						fp.x -= Math.sin(fp.yaw) * speed * 0.7 * dt;
+						fp.z -= Math.cos(fp.yaw) * speed * 0.7 * dt;
 					}
-					if (K.KeyA || K.ArrowLeft) fp.yaw += 1.4 * dt;
-					if (K.KeyD || K.ArrowRight) fp.yaw -= 1.4 * dt;
+					const turnSp = 2.1;
+					if (fp.lookL || K.KeyA || K.ArrowLeft) fp.yaw += turnSp * dt;
+					if (fp.lookR || K.KeyD || K.ArrowRight) fp.yaw -= turnSp * dt;
 					// Clamp to large garage interior (local space, rot=0)
 					let lx = fp.x - GARAGE_POS.x;
 					let lz = fp.z - GARAGE_POS.z;
@@ -3852,7 +3857,7 @@ const truckBody = (() => {
 						fp.legs.position.set(fp.x, eye, fp.z);
 						fp.legs.rotation.y = fp.yaw;
 						fp.legs.visible = fp.pitch < -0.25;
-						const bob = fp.walk ? Math.sin(performance.now() * 0.012) * 0.08 : 0;
+						const bob = (fp.walk || fp.walkBack) ? Math.sin(performance.now() * 0.012) * 0.08 : 0;
 						const legL = fp.legs.getObjectByName('legL');
 						const legR = fp.legs.getObjectByName('legR');
 						if (legL) legL.rotation.x = bob;
