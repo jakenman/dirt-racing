@@ -1054,33 +1054,31 @@
 			}
 
 			function driver(g, x, y, z, color) {
-				// suit
-				const t = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.38, 3, SEG(8)), mat(0x1a3a8a));
-				t.position.set(x, y, z);
-				g.add(t);
-				// shoulders
-				g.add(new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 5), mat(0x1a3a8a)).translateX(x - 0.22).translateY(y + 0.15).translateZ(z));
-				g.add(new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 5), mat(0x1a3a8a)).translateX(x + 0.22).translateY(y + 0.15).translateZ(z));
-				// arms on wheel
-				const armL = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.25, 2, 5), mat(0x1a3a8a));
-				armL.position.set(x - 0.28, y + 0.05, z - 0.2);
+				const rig = new THREE.Group();
+				rig.name = 'driverRig';
+				rig.position.set(x, y, z);
+				const suit = mat(0x1a3a8a);
+				const t = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.38, 3, SEG(8)), suit);
+				rig.add(t);
+				rig.add(new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 5), suit).translateX(-0.22).translateY(0.15));
+				rig.add(new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 5), suit).translateX(0.22).translateY(0.15));
+				const armL = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.25, 2, 5), suit);
+				armL.position.set(-0.28, 0.05, -0.2);
 				armL.rotation.z = 0.5;
 				armL.rotation.x = 0.6;
-				g.add(armL);
+				rig.add(armL);
 				const armR = armL.clone();
-				armR.position.x = x + 0.28;
+				armR.position.x = 0.28;
 				armR.rotation.z = -0.5;
-				g.add(armR);
-				// helmet
+				rig.add(armR);
 				const h = new THREE.Mesh(new THREE.SphereGeometry(0.24, SEG(14), SEG(10)), mat(color));
-				h.position.set(x, y + 0.48, z);
-				g.add(h);
-				const v = new THREE.Mesh(new THREE.SphereGeometry(0.245, SEG(10), 6, Math.PI * 0.75, Math.PI * 0.5, Math
-					.PI * 0.35, Math.PI * 0.25), mat(0x111111));
+				h.position.set(0, 0.48, 0);
+				rig.add(h);
+				const v = new THREE.Mesh(new THREE.SphereGeometry(0.245, SEG(10), 6, Math.PI * 0.75, Math.PI * 0.5, Math.PI * 0.35, Math.PI * 0.25), mat(0x111111));
 				v.position.copy(h.position);
-				g.add(v);
-				// visor strip
-				g.add(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 0.08), mat(0x222)).translateX(x).translateY(y + 0.48).translateZ(z - 0.2));
+				rig.add(v);
+				rig.add(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 0.08), mat(0x222)).translateY(0.48).translateZ(-0.2));
+				g.add(rig);
 				return h
 			}
 
@@ -2150,9 +2148,12 @@ const truckBody = (() => {
 				color: 0xffd23f,
 				num: '1',
 				livery: 0,
-				wallColor: 0x4a4a52
+				wallColor: 0x4a4a52,
+				floorStyle: 1, // 0 plain, 1 checker
+				floorColor: 0x3d3d44
 			};
 			const GARAGE_WALL_COLORS = [0x4a4a52, 0x5c4030, 0x3a4a5c, 0x4a5c3a, 0x5c3a3a, 0x2a2a30];
+			const GARAGE_FLOOR_COLORS = [0x3d3d44, 0x2a2a30, 0x5a4030, 0x1a3a5c, 0x3a1a1a, 0x1a4a2a];
 			const LIVERIES = [
 				{ id: 0, name: 'Solid', desc: 'Full body color' },
 				{ id: 1, name: 'Stripes', desc: 'Bold racing stripes' },
@@ -2507,14 +2508,33 @@ const truckBody = (() => {
 				const GW = 36, // floor width
 					GD = 28, // floor depth
 					GH = 8; // wall height
-				// concrete floor
-				const floor = new THREE.Mesh(
-					new THREE.PlaneGeometry(GW, GD),
-					new THREE.MeshStandardMaterial({ color: 0x3d3d44, roughness: 0.92, metalness: 0.04 })
-				);
+				// Floor (plain or checker, player color)
+				function makeFloorMat() {
+					const col = PLAYER_SETUP.floorColor || 0x3d3d44;
+					const style = PLAYER_SETUP.floorStyle != null ? PLAYER_SETUP.floorStyle : 1;
+					if (style === 1) {
+						const tex = cvTex(256, 256, (x, w, h) => {
+							const a = '#' + new THREE.Color(col).getHexString();
+							const b = '#' + new THREE.Color(col).offsetHSL(0, 0, -0.25).getHexString();
+							const cs = 32;
+							for (let yy = 0; yy < h; yy += cs)
+								for (let xx = 0; xx < w; xx += cs) {
+									x.fillStyle = ((xx / cs + yy / cs) % 2 < 1) ? a : b;
+									x.fillRect(xx, yy, cs, cs);
+								}
+						});
+						tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+						tex.repeat.set(8, 6);
+						return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0.05 });
+					}
+					return new THREE.MeshStandardMaterial({ color: col, roughness: 0.92, metalness: 0.04 });
+				}
+				const floor = new THREE.Mesh(new THREE.PlaneGeometry(GW, GD), makeFloorMat());
 				floor.rotation.x = -Math.PI / 2;
 				floor.position.y = 0.02;
+				floor.name = 'garageFloor';
 				garageG.add(floor);
+				garageG.userData.floorMesh = floor;
 				// outer ground pad so horizon isn't pure void
 				const pad = new THREE.Mesh(
 					new THREE.CircleGeometry(55, 24),
@@ -2548,6 +2568,26 @@ const truckBody = (() => {
 				const doorTop = new THREE.Mesh(new THREE.BoxGeometry(doorW + 0.4, 0.4, 0.4), wallM);
 				doorTop.position.set(0, GH - 0.2, GD / 2);
 				garageG.add(doorTop);
+				// Roll-up style door (two panels that lift on race exit)
+				const doorMat = new THREE.MeshStandardMaterial({ color: 0x5a5a62, metalness: 0.45, roughness: 0.4 });
+				const doorPanel = new THREE.Group();
+				doorPanel.name = 'garageDoor';
+				const panelH = GH - 0.5;
+				for (let i = 0; i < 6; i++) {
+					const slat = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.2, panelH / 6 - 0.04, 0.12), doorMat);
+					slat.position.y = 0.3 + (i + 0.5) * (panelH / 6);
+					doorPanel.add(slat);
+				}
+				// window strip
+				doorPanel.add(new THREE.Mesh(
+					new THREE.BoxGeometry(doorW - 0.6, 0.35, 0.08),
+					new THREE.MeshStandardMaterial({ color: 0x88aacc, transparent: true, opacity: 0.55, metalness: 0.3, roughness: 0.2 })
+				).translateY(panelH * 0.72));
+				doorPanel.position.set(0, 0, GD / 2 - 0.1);
+				garageG.add(doorPanel);
+				garageG.userData.door = doorPanel;
+				garageG.userData.doorClosedY = 0;
+				garageG.userData.doorOpenY = panelH + 0.5;
 				// roof
 				const roof = new THREE.Mesh(
 					new THREE.BoxGeometry(GW + 1, 0.3, GD + 1),
@@ -2704,6 +2744,7 @@ const truckBody = (() => {
 				makeStation('number', 'NUMBER', 10, -4, 0xd62828);
 				makeStation('bias', 'WEIGHT', 0, -9, 0x2a9d3f);
 				makeStation('walls', 'WALLS', -12, 2, 0x9a8a6a);
+				makeStation('floor', 'FLOOR', 12, 2, 0x888888);
 				makeStation('door', 'RACE →', 0, 12.5, 0xffd23f);
 				scene.add(garageG);
 			}
@@ -2751,8 +2792,37 @@ const truckBody = (() => {
 				// Car in center of big garage, facing the door (+Z)
 				garageCar.g.position.set(GARAGE_POS.x, 0, GARAGE_POS.z - 2);
 				garageCar.g.rotation.y = Math.PI;
+				// Nobody in the seat while you're walking the shop
+				const rig = garageCar.g.getObjectByName('driverRig');
+				if (rig) rig.visible = false;
+				if (garageCar.helmet) garageCar.helmet.visible = false;
 			}
 
+			function refreshGarageFloor() {
+				if (!garageG || !garageG.userData.floorMesh) return;
+				const mesh = garageG.userData.floorMesh;
+				if (mesh.material.map) mesh.material.map.dispose();
+				mesh.material.dispose();
+				const col = PLAYER_SETUP.floorColor || 0x3d3d44;
+				const style = PLAYER_SETUP.floorStyle != null ? PLAYER_SETUP.floorStyle : 1;
+				if (style === 1) {
+					const tex = cvTex(256, 256, (x, w, h) => {
+						const a = '#' + new THREE.Color(col).getHexString();
+						const b = '#' + new THREE.Color(col).offsetHSL(0, 0, -0.25).getHexString();
+						const cs = 32;
+						for (let yy = 0; yy < h; yy += cs)
+							for (let xx = 0; xx < w; xx += cs) {
+								x.fillStyle = ((xx / cs + yy / cs) % 2 < 1) ? a : b;
+								x.fillRect(xx, yy, cs, cs);
+							}
+					});
+					tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+					tex.repeat.set(8, 6);
+					mesh.material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0.05 });
+				} else {
+					mesh.material = new THREE.MeshStandardMaterial({ color: col, roughness: 0.92, metalness: 0.04 });
+				}
+			}
 			function refreshGarageCar() {
 				spawnGarageCar();
 			}
@@ -2920,6 +2990,33 @@ const truckBody = (() => {
 						}
 						if (e.target.id === 'fpModalClose') closeFpModal();
 					};
+				} else if (st.id === 'floor') {
+					const style = PLAYER_SETUP.floorStyle != null ? PLAYER_SETUP.floorStyle : 1;
+					let html = '<h2 style="color:#ffd23f;margin:0 0 10px">Garage Floor</h2>';
+					html += '<div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px">';
+					html += `<button type="button" data-fstyle="0" style="padding:10px 14px;border-radius:8px;border:2px solid ${style===0?'#ffd23f':'#444'};background:#333;color:#fff">Plain</button>`;
+					html += `<button type="button" data-fstyle="1" style="padding:10px 14px;border-radius:8px;border:2px solid ${style===1?'#ffd23f':'#444'};background:#333;color:#fff">Checker</button>`;
+					html += '</div><div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">';
+					GARAGE_FLOOR_COLORS.forEach(col => {
+						html += `<button type="button" data-fcol="${col}" style="width:48px;height:48px;border-radius:8px;background:#${new THREE.Color(col).getHexString()};border:3px solid ${(PLAYER_SETUP.floorColor||0x3d3d44)===col?'#ffd23f':'#333'}"></button>`;
+					});
+					html += '</div><button type="button" id="fpModalClose" style="margin-top:14px;width:100%;background:#555;color:#fff">Done</button>';
+					openFpModal(html);
+					document.getElementById('fpModalBox').onclick = (e) => {
+						const stBtn = e.target.closest('button[data-fstyle]');
+						const colBtn = e.target.closest('button[data-fcol]');
+						if (stBtn) {
+							PLAYER_SETUP.floorStyle = +stBtn.getAttribute('data-fstyle');
+							refreshGarageFloor();
+							useFpStation();
+						}
+						if (colBtn) {
+							PLAYER_SETUP.floorColor = +colBtn.getAttribute('data-fcol');
+							refreshGarageFloor();
+							useFpStation();
+						}
+						if (e.target.id === 'fpModalClose') closeFpModal();
+					};
 				} else if (st.id === 'door') {
 					openFpModal(`<h2 style="color:#ffd23f;margin:0 0 12px">Race Night</h2>
 						<p style="font-size:13px;opacity:.85;margin-bottom:12px">${cls==='sprint'?'Sprint Car':'Dirt Truck'} · #${PLAYER_SETUP.num||'1'}</p>
@@ -2945,7 +3042,6 @@ const truckBody = (() => {
 			function startDriveToTrack(mode) {
 				raceMode = mode;
 				ensureAudio();
-				// Keep garage car as the drive vehicle
 				document.getElementById('fpHud').style.display = 'none';
 				document.getElementById('fpModal').style.display = 'none';
 				if (fp.legs) { scene.remove(fp.legs); fp.legs = null; }
@@ -2956,14 +3052,19 @@ const truckBody = (() => {
 					initRace();
 					return;
 				}
-				driveFrom = { x: GARAGE_POS.x, z: GARAGE_POS.z + 10 };
+				// Put driver back in for the ride out
+				const rig = driveCar.g.getObjectByName('driverRig');
+				if (rig) rig.visible = true;
+				if (driveCar.helmet) driveCar.helmet.visible = true;
+				driveFrom = { x: GARAGE_POS.x, z: GARAGE_POS.z + 2 };
 				const ss = getStartS();
 				const sp = cl(ss, 0);
 				driveTo = { x: sp.x, z: sp.z, h: Math.atan2(sp.tx, sp.tz) };
-				driveCar.g.position.set(driveFrom.x, 0.2, driveFrom.z);
+				driveCar.g.position.set(GARAGE_POS.x, 0.2, GARAGE_POS.z - 2);
+				driveCar.g.rotation.y = 0; // face +Z door
 				driveT = 0;
 				state = 'driveToTrack';
-				msg.textContent = 'Heading to the track…';
+				msg.textContent = 'Garage door opening…';
 				msg.style.display = 'block';
 			}
 			function finishDriveToTrack() {
@@ -3651,21 +3752,38 @@ const truckBody = (() => {
 				// Short drive from garage → track (cinematic, mobile-safe)
 				if (state === 'driveToTrack' && driveCar) {
 					driveT += dt;
-					const t = Math.min(1, driveT / 4.2);
-					const e = t * t * (3 - 2 * t); // smoothstep
-					const x = driveFrom.x + (driveTo.x - driveFrom.x) * e;
-					const z = driveFrom.z + (driveTo.z - driveFrom.z) * e;
-					const dx = driveTo.x - driveFrom.x, dz = driveTo.z - driveFrom.z;
-					const h = Math.atan2(dx, dz);
-					driveCar.g.position.set(x, 0.25, z);
-					driveCar.g.rotation.y = h + Math.PI;
-					// chase cam behind car
-					cam.position.set(x - Math.sin(h) * 9, 3.5, z - Math.cos(h) * 9);
-					cam.up.set(0, 1, 0);
-					cam.lookAt(x, 1.2, z);
-					cam.fov = 60;
-					cam.updateProjectionMatrix();
-					if (t >= 1) finishDriveToTrack();
+					const door = garageG && garageG.userData.door;
+					const openY = garageG && garageG.userData.doorOpenY != null ? garageG.userData.doorOpenY : 8;
+					// Phase 1: door rolls up (~1.3s)
+					if (driveT < 1.3) {
+						const dtOpen = Math.min(1, driveT / 1.3);
+						const e = dtOpen * dtOpen * (3 - 2 * dtOpen);
+						if (door) door.position.y = e * openY;
+						msg.textContent = 'Garage door opening…';
+						const cx = GARAGE_POS.x, cz = GARAGE_POS.z - 2;
+						cam.position.set(cx - 6, 3.2, cz + 8);
+						cam.up.set(0, 1, 0);
+						cam.lookAt(cx, 1.5, cz);
+						cam.fov = 58;
+						cam.updateProjectionMatrix();
+					} else {
+						if (door) door.position.y = openY;
+						msg.textContent = 'Heading to the track…';
+						const t = Math.min(1, (driveT - 1.3) / 4.0);
+						const e = t * t * (3 - 2 * t);
+						const x = driveFrom.x + (driveTo.x - driveFrom.x) * e;
+						const z = driveFrom.z + (driveTo.z - driveFrom.z) * e;
+						const dx = driveTo.x - driveFrom.x, dz = driveTo.z - driveFrom.z;
+						const h = Math.atan2(dx, dz);
+						driveCar.g.position.set(x, 0.25, z);
+						driveCar.g.rotation.y = h + Math.PI;
+						cam.position.set(x - Math.sin(h) * 9, 3.5, z - Math.cos(h) * 9);
+						cam.up.set(0, 1, 0);
+						cam.lookAt(x, 1.2, z);
+						cam.fov = 60;
+						cam.updateProjectionMatrix();
+						if (t >= 1) finishDriveToTrack();
+					}
 				}
 				// FP garage movement + stations
 				if (state === 'garage' && garageG) {
