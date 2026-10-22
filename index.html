@@ -1551,26 +1551,22 @@ const truckBody = (() => {
 					metalness: 0.05
 				});
 			{
-				const grassTex = cvTex(256, 256, (x, w, h) => {
-					x.fillStyle = '#2d5a22';
+				// Whole facility is dirt — infield, apron, lots (still darker groove on the racing surface)
+				const fieldTex = cvTex(256, 256, (x, w, h) => {
+					x.fillStyle = '#5a3d22';
 					x.fillRect(0, 0, w, h);
-					for (let i = 0; i < 8000; i++) {
+					for (let i = 0; i < 9000; i++) {
 						const v = Math.random();
-						x.fillStyle = v > 0.6 ? `rgba(80,140,50,${0.15+Math.random()*0.3})` : v > 0.3 ? `rgba(20,50,15,${0.1+Math.random()*0.25})` : `rgba(100,90,40,${0.05+Math.random()*0.15})`;
-						x.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 1 + Math.random() * 3);
-					}
-					// subtle mowing strips
-					for (let y = 0; y < h; y += 12) {
-						x.fillStyle = 'rgba(0,0,0,0.06)';
-						x.fillRect(0, y, w, 5);
+						x.fillStyle = v > 0.55 ? `rgba(90,60,30,${0.2+Math.random()*0.35})` : v > 0.25 ? `rgba(40,25,12,${0.15+Math.random()*0.3})` : `rgba(120,90,50,${0.1+Math.random()*0.2})`;
+						x.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 4, 1 + Math.random() * 3);
 					}
 				});
-				grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping;
-				grassTex.repeat.set(60, 60);
+				fieldTex.wrapS = fieldTex.wrapT = THREE.RepeatWrapping;
+				fieldTex.repeat.set(50, 50);
 				const inf = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshStandardMaterial({
-					map: grassTex,
-					roughness: 0.92,
-					metalness: 0
+					map: fieldTex,
+					roughness: 0.95,
+					metalness: 0.02
 				}));
 				inf.rotation.x = -Math.PI / 2;
 				inf.position.y = -0.3;
@@ -2153,8 +2149,10 @@ const truckBody = (() => {
 				bias: 0,
 				color: 0xffd23f,
 				num: '1',
-				livery: 0 // 0 solid, 1 stripes, 2 two-tone, 3 lightning, 4 hoop, 5 checker
+				livery: 0,
+				wallColor: 0x4a4a52
 			};
+			const GARAGE_WALL_COLORS = [0x4a4a52, 0x5c4030, 0x3a4a5c, 0x4a5c3a, 0x5c3a3a, 0x2a2a30];
 			const LIVERIES = [
 				{ id: 0, name: 'Solid', desc: 'Full body color' },
 				{ id: 1, name: 'Stripes', desc: 'Bold racing stripes' },
@@ -2524,7 +2522,9 @@ const truckBody = (() => {
 				pad.rotation.x = -Math.PI / 2;
 				pad.position.y = 0.005;
 				garageG.add(pad);
-				const wallM = new THREE.MeshStandardMaterial({ color: 0x4a4a52, roughness: 0.88, metalness: 0.08 });
+				const wallCol = PLAYER_SETUP.wallColor || 0x4a4a52;
+				const wallM = new THREE.MeshStandardMaterial({ color: wallCol, roughness: 0.88, metalness: 0.08 });
+				garageG.userData.wallM = wallM;
 				// walls (open +Z door side)
 				const back = new THREE.Mesh(new THREE.BoxGeometry(GW, GH, 0.4), wallM);
 				back.position.set(0, GH / 2, -GD / 2);
@@ -2599,35 +2599,102 @@ const truckBody = (() => {
 					t.position.set(12, 0.22 + i * 0.3, 6);
 					garageG.add(t);
 				}
-				// stations
+				// Tool shelf
+				const shelf = new THREE.Group();
+				shelf.position.set(-14, 0, -10);
+				const shelfBoard = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.1, 0.7), mat(0x5a4030));
+				shelfBoard.position.y = 1.4;
+				shelf.add(shelfBoard);
+				shelf.add(new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.1, 0.7), mat(0x5a4030)).translateY(0.9));
+				for (const x of [-1.2, 0, 1.2]) {
+					shelf.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.5, 0.1), mat(0x333)).translateX(x).translateY(0.75));
+				}
+				// tools on shelf (simple shapes)
+				const toolChrome = chrome;
+				for (let i = 0; i < 5; i++) {
+					const wrench = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.08), toolChrome);
+					wrench.position.set(-1.0 + i * 0.45, 1.48, 0);
+					wrench.rotation.z = 0.2 * (i % 2 ? 1 : -1);
+					shelf.add(wrench);
+				}
+				shelf.add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.35, 6), mat(0x444)).translateX(0.8).translateY(1.1));
+				shelf.add(new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.25), mat(0xff6600)).translateX(-0.6).translateY(1.05));
+				garageG.add(shelf);
+				// Computer desk + chair
+				const desk = new THREE.Group();
+				desk.position.set(12, 0, -10);
+				desk.add(new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.1, 1.1), mat(0x3a3a40)).translateY(0.85));
+				for (const [x, z] of [[-1, 0.4], [1, 0.4], [-1, -0.4], [1, -0.4]]) {
+					desk.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.85, 0.1), mat(0x222)).translateX(x).translateY(0.42).translateZ(z));
+				}
+				// monitor
+				const mon = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.55, 0.06), mat(0x111));
+				mon.position.set(0, 1.35, -0.2);
+				desk.add(mon);
+				const screen = new THREE.Mesh(
+					new THREE.PlaneGeometry(0.8, 0.45),
+					new THREE.MeshBasicMaterial({ color: 0x2266aa })
+				);
+				screen.position.set(0, 1.35, -0.16);
+				desk.add(screen);
+				desk.add(new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.35, 0.15), mat(0x333)).translateY(1.05).translateZ(-0.2));
+				// keyboard
+				desk.add(new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.03, 0.22), mat(0x1a1a1a)).translateY(0.92).translateZ(0.15));
+				garageG.add(desk);
+				// chair
+				const chair = new THREE.Group();
+				chair.position.set(12, 0, -8.5);
+				chair.add(new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 0.08, 10), mat(0x222)).translateY(0.55));
+				chair.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.08), mat(0x1a1a2a)).translateY(0.95).translateZ(-0.22));
+				chair.add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.55, 6), mat(0x444)).translateY(0.28));
+				garageG.add(chair);
+				// Cooler stations
 				fp.stations = [];
 				function makeStation(id, label, lx, lz, col) {
 					const g = new THREE.Group();
 					g.position.set(lx, 0, lz);
-					const post = new THREE.Mesh(
-						new THREE.CylinderGeometry(0.14, 0.18, 1.2, 8),
-						new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.4, roughness: 0.4 })
+					// diamond plate base
+					const base = new THREE.Mesh(
+						new THREE.CylinderGeometry(0.85, 0.95, 0.12, 8),
+						new THREE.MeshStandardMaterial({ color: 0x666870, metalness: 0.7, roughness: 0.35 })
 					);
-					post.position.y = 0.6;
-					g.add(post);
-					const pad = new THREE.Mesh(
-						new THREE.CylinderGeometry(0.7, 0.7, 0.06, 12),
-						new THREE.MeshStandardMaterial({ color: 0x222, roughness: 0.85 })
+					base.position.y = 0.06;
+					g.add(base);
+					// chrome rings on pole
+					const pole = new THREE.Mesh(
+						new THREE.CylinderGeometry(0.1, 0.12, 1.35, 10),
+						new THREE.MeshStandardMaterial({ color: 0x888890, metalness: 0.85, roughness: 0.25 })
 					);
-					pad.position.y = 0.03;
-					g.add(pad);
+					pole.position.y = 0.75;
+					g.add(pole);
+					for (const y of [0.35, 0.7, 1.05]) {
+						g.add(new THREE.Mesh(
+							new THREE.TorusGeometry(0.14, 0.03, 6, 12),
+							chrome
+						).translateY(y));
+					}
+					// glowing beacon top
+					const beacon = new THREE.Mesh(
+						new THREE.SphereGeometry(0.18, 10, 8),
+						new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.85, roughness: 0.3 })
+					);
+					beacon.position.y = 1.55;
+					g.add(beacon);
 					const cv = document.createElement('canvas');
 					cv.width = 256; cv.height = 64;
 					const cx = cv.getContext('2d');
-					cx.fillStyle = 'rgba(0,0,0,0.8)';
+					cx.fillStyle = 'rgba(0,0,0,0.85)';
 					cx.fillRect(0, 0, 256, 64);
+					cx.strokeStyle = '#' + new THREE.Color(col).getHexString();
+					cx.lineWidth = 4;
+					cx.strokeRect(4, 4, 248, 56);
 					cx.fillStyle = '#ffd23f';
-					cx.font = 'bold 30px Arial';
+					cx.font = 'bold 28px Arial';
 					cx.textAlign = 'center';
 					cx.fillText(label, 128, 42);
 					const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false }));
-					sp.scale.set(2.6, 0.65, 1);
-					sp.position.y = 1.7;
+					sp.scale.set(2.8, 0.7, 1);
+					sp.position.y = 2.0;
 					g.add(sp);
 					garageG.add(g);
 					fp.stations.push({ id, label, local: { x: lx, z: lz }, mesh: g });
@@ -2635,6 +2702,7 @@ const truckBody = (() => {
 				makeStation('color', 'COLOR', -10, -4, 0x1d70d6);
 				makeStation('number', 'NUMBER', 10, -4, 0xd62828);
 				makeStation('bias', 'WEIGHT', 0, -9, 0x2a9d3f);
+				makeStation('walls', 'WALLS', -12, 2, 0x9a8a6a);
 				makeStation('door', 'RACE →', 0, 12.5, 0xffd23f);
 				scene.add(garageG);
 			}
@@ -2832,6 +2900,22 @@ const truckBody = (() => {
 						document.getElementById('fpBiasVal').textContent = v === 0 ? 'CENTER' : (v < 0 ? Math.abs(v) + '% L' : v + '% R');
 					};
 					document.getElementById('fpModalClose').onclick = closeFpModal;
+				} else if (st.id === 'walls') {
+					let html = '<h2 style="color:#ffd23f;margin:0 0 12px">Garage Walls</h2><div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">';
+					GARAGE_WALL_COLORS.forEach(col => {
+						html += `<button type="button" data-wall="${col}" style="width:48px;height:48px;border-radius:8px;background:#${new THREE.Color(col).getHexString()};border:3px solid ${(PLAYER_SETUP.wallColor||0x4a4a52)===col?'#ffd23f':'#333'}"></button>`;
+					});
+					html += '</div><button type="button" id="fpModalClose" style="margin-top:14px;width:100%;background:#555;color:#fff">Done</button>';
+					openFpModal(html);
+					document.getElementById('fpModalBox').onclick = (e) => {
+						const b = e.target.closest('button[data-wall]');
+						if (b) {
+							PLAYER_SETUP.wallColor = +b.getAttribute('data-wall');
+							if (garageG && garageG.userData.wallM) garageG.userData.wallM.color.setHex(PLAYER_SETUP.wallColor);
+							useFpStation();
+						}
+						if (e.target.id === 'fpModalClose') closeFpModal();
+					};
 				} else if (st.id === 'door') {
 					openFpModal(`<h2 style="color:#ffd23f;margin:0 0 12px">Race Night</h2>
 						<p style="font-size:13px;opacity:.85;margin-bottom:12px">${cls==='sprint'?'Sprint Car':'Dirt Truck'} · #${PLAYER_SETUP.num||'1'}</p>
@@ -2840,23 +2924,57 @@ const truckBody = (() => {
 						<button type="button" id="fpModalClose" style="margin-top:12px;width:100%;background:#333;color:#fff;padding:10px;border:none;border-radius:8px">Stay in garage</button>`);
 					document.getElementById('fpQuick').onclick = () => {
 						closeFpModal();
-						leaveFpGarage();
 						applySetup();
-						raceMode = 'quick';
-						ensureAudio();
-						initRace();
+						startDriveToTrack('quick');
 					};
 					document.getElementById('fpFull').onclick = () => {
 						closeFpModal();
-						leaveFpGarage();
 						applySetup();
-						raceMode = 'full';
-						ensureAudio();
-						initRace();
+						startDriveToTrack('full');
 					};
 					document.getElementById('fpModalClose').onclick = closeFpModal;
 				}
 			}
+			
+			let driveT = 0;
+			let driveFrom = null, driveTo = null, driveCar = null;
+			function startDriveToTrack(mode) {
+				raceMode = mode;
+				ensureAudio();
+				// Keep garage car as the drive vehicle
+				document.getElementById('fpHud').style.display = 'none';
+				document.getElementById('fpModal').style.display = 'none';
+				if (fp.legs) { scene.remove(fp.legs); fp.legs = null; }
+				driveCar = garageCar;
+				garageCar = null;
+				if (!driveCar) {
+					state = 'menu';
+					initRace();
+					return;
+				}
+				driveFrom = { x: GARAGE_POS.x, z: GARAGE_POS.z + 10 };
+				const ss = getStartS();
+				const sp = cl(ss, 0);
+				driveTo = { x: sp.x, z: sp.z, h: Math.atan2(sp.tx, sp.tz) };
+				driveCar.g.position.set(driveFrom.x, 0.2, driveFrom.z);
+				driveT = 0;
+				state = 'driveToTrack';
+				msg.textContent = 'Heading to the track…';
+				msg.style.display = 'block';
+			}
+			function finishDriveToTrack() {
+				if (driveCar) {
+					scene.remove(driveCar.g);
+					driveCar = null;
+				}
+				if (garageG) {
+					scene.remove(garageG);
+					garageG = null;
+				}
+				msg.textContent = '';
+				initRace();
+			}
+
 			function leaveFpGarage() {
 				document.getElementById('fpHud').style.display = 'none';
 				document.getElementById('fpModal').style.display = 'none';
@@ -3374,7 +3492,7 @@ const truckBody = (() => {
 				const steps = 2,
 					h = dt / steps;
 				for (let k = 0; k < steps; k++) {
-					if (state !== 'count' && state !== 'menu' && state !== 'garage') {
+					if (state !== 'count' && state !== 'menu' && state !== 'garage' && state !== 'driveToTrack') {
 						raceT += h;
 						for (const c of cars) {
 							if (c.ai) aiDrive(c, h);
@@ -3526,6 +3644,25 @@ const truckBody = (() => {
 						m.material.opacity = Math.max(0, m.life * 0.42);
 						if (m.life <= 0) m.visible = false;
 					}
+				// Short drive from garage → track (cinematic, mobile-safe)
+				if (state === 'driveToTrack' && driveCar) {
+					driveT += dt;
+					const t = Math.min(1, driveT / 4.2);
+					const e = t * t * (3 - 2 * t); // smoothstep
+					const x = driveFrom.x + (driveTo.x - driveFrom.x) * e;
+					const z = driveFrom.z + (driveTo.z - driveFrom.z) * e;
+					const dx = driveTo.x - driveFrom.x, dz = driveTo.z - driveFrom.z;
+					const h = Math.atan2(dx, dz);
+					driveCar.g.position.set(x, 0.25, z);
+					driveCar.g.rotation.y = h + Math.PI;
+					// chase cam behind car
+					cam.position.set(x - Math.sin(h) * 9, 3.5, z - Math.cos(h) * 9);
+					cam.up.set(0, 1, 0);
+					cam.lookAt(x, 1.2, z);
+					cam.fov = 60;
+					cam.updateProjectionMatrix();
+					if (t >= 1) finishDriveToTrack();
+				}
 				// FP garage movement + stations
 				if (state === 'garage' && garageG) {
 					const speed = 3.2;
