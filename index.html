@@ -2398,8 +2398,12 @@ const truckBody = (() => {
 
 			function setTouchUI(on) {
 				touchMode = on;
-				tbs.forEach(b => b.style.display = on ? 'flex' : 'none');
-				help.style.display = on ? 'none' : 'block'
+				tbs.forEach(b => {
+					b.style.display = on ? 'flex' : 'none';
+					if (!on) b.style.visibility = 'hidden';
+					else b.style.visibility = 'visible';
+				});
+				if (help) help.style.display = on ? 'none' : 'block';
 			}
 
 			function syncTouches(list) {
@@ -2422,6 +2426,8 @@ const truckBody = (() => {
 			}
 			const onTouch = e => {
 				if (document.getElementById('editor').style.display === 'flex') return;
+				// Never show race gas/steer while in the shop or driving out
+				if (state === 'garage' || state === 'driveToTrack' || state === 'menu') return;
 				if (!touchMode) setTouchUI(true);
 				const tgt = e.target;
 				const ui = tgt.closest && tgt.closest('button,#menu,#res,#editor');
@@ -2560,26 +2566,23 @@ const truckBody = (() => {
 				const doorTop = new THREE.Mesh(new THREE.BoxGeometry(doorW + 0.4, 0.4, 0.4), wallM);
 				doorTop.position.set(0, GH - 0.2, GD / 2);
 				garageG.add(doorTop);
-				// Roll-up style door (two panels that lift on race exit)
-				const doorMat = new THREE.MeshStandardMaterial({ color: 0x5a5a62, metalness: 0.45, roughness: 0.4 });
-				const doorPanel = new THREE.Group();
+				// Solid garage door — lifts straight up on race exit
+				const doorMat = new THREE.MeshStandardMaterial({ color: 0x6a6a72, metalness: 0.5, roughness: 0.35 });
+				const panelH = GH - 0.6;
+				const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.15, panelH, 0.18), doorMat);
 				doorPanel.name = 'garageDoor';
-				const panelH = GH - 0.5;
-				for (let i = 0; i < 6; i++) {
-					const slat = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.2, panelH / 6 - 0.04, 0.12), doorMat);
-					slat.position.y = 0.3 + (i + 0.5) * (panelH / 6);
-					doorPanel.add(slat);
-				}
-				// window strip
-				doorPanel.add(new THREE.Mesh(
-					new THREE.BoxGeometry(doorW - 0.6, 0.35, 0.08),
-					new THREE.MeshStandardMaterial({ color: 0x88aacc, transparent: true, opacity: 0.55, metalness: 0.3, roughness: 0.2 })
-				).translateY(panelH * 0.72));
-				doorPanel.position.set(0, 0, GD / 2 - 0.1);
+				doorPanel.position.set(0, panelH / 2 + 0.15, GD / 2 - 0.15);
+				// window band
+				const win = new THREE.Mesh(
+					new THREE.PlaneGeometry(doorW - 1.2, 0.5),
+					new THREE.MeshStandardMaterial({ color: 0x99bbee, transparent: true, opacity: 0.5, metalness: 0.2, roughness: 0.2 })
+				);
+				win.position.set(0, panelH * 0.25, 0.1);
+				doorPanel.add(win);
 				garageG.add(doorPanel);
 				garageG.userData.door = doorPanel;
-				garageG.userData.doorClosedY = 0;
-				garageG.userData.doorOpenY = panelH + 0.5;
+				garageG.userData.doorBaseY = panelH / 2 + 0.15;
+				garageG.userData.doorOpenY = panelH / 2 + 0.15 + panelH + 0.4;
 				// roof
 				const roof = new THREE.Mesh(
 					new THREE.BoxGeometry(GW + 1, 0.3, GD + 1),
@@ -2831,7 +2834,8 @@ const truckBody = (() => {
 				g.style.display = 'none';
 				document.getElementById('fpHud').style.display = 'block';
 				document.getElementById('fpModal').style.display = 'none';
-				setTouchUI(false); // no gas/brake in the shop
+				setTouchUI(false); // no gas/brake/steer in the shop
+				document.querySelectorAll('.tb').forEach(b => { b.style.display = 'none'; b.style.visibility = 'hidden'; });
 				document.getElementById('gClass').textContent = k === 'sprint' ? 'Sprint Car — light, fast, tail-happy' :
 					'Dirt Truck — heavy, rolls, more grip';
 				const biasEl = document.getElementById('gBias');
@@ -3757,23 +3761,24 @@ const truckBody = (() => {
 				if (state === 'driveToTrack' && driveCar) {
 					driveT += dt;
 					const door = garageG && garageG.userData.door;
-					const openY = garageG && garageG.userData.doorOpenY != null ? garageG.userData.doorOpenY : 8;
-					// Phase 1: door rolls up (~1.3s)
-					if (driveT < 1.3) {
-						const dtOpen = Math.min(1, driveT / 1.3);
-						const e = dtOpen * dtOpen * (3 - 2 * dtOpen);
-						if (door) door.position.y = e * openY;
+					const baseY = garageG && garageG.userData.doorBaseY != null ? garageG.userData.doorBaseY : 4;
+					const openY = garageG && garageG.userData.doorOpenY != null ? garageG.userData.doorOpenY : 12;
+					// Phase 1: door lifts (~1.8s) — camera watches the door
+					if (driveT < 1.8) {
+						const u = Math.min(1, driveT / 1.8);
+						const e = u * u * (3 - 2 * u);
+						if (door) door.position.y = baseY + (openY - baseY) * e;
 						msg.textContent = 'Garage door opening…';
-						const cx = GARAGE_POS.x, cz = GARAGE_POS.z - 2;
-						cam.position.set(cx - 6, 3.2, cz + 8);
+						const cx = GARAGE_POS.x, cz = GARAGE_POS.z + 4;
+						cam.position.set(cx, 3.5, cz + 14);
 						cam.up.set(0, 1, 0);
-						cam.lookAt(cx, 1.5, cz);
-						cam.fov = 58;
+						cam.lookAt(cx, 3.0, GARAGE_POS.z + 12);
+						cam.fov = 55;
 						cam.updateProjectionMatrix();
 					} else {
 						if (door) door.position.y = openY;
 						msg.textContent = 'Heading to the track…';
-						const t = Math.min(1, (driveT - 1.3) / 4.0);
+						const t = Math.min(1, (driveT - 1.8) / 4.0);
 						const e = t * t * (3 - 2 * t);
 						const x = driveFrom.x + (driveTo.x - driveFrom.x) * e;
 						const z = driveFrom.z + (driveTo.z - driveFrom.z) * e;
