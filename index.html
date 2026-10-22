@@ -2176,7 +2176,8 @@ const truckBody = (() => {
 			const fp = {
 				x: 0, z: 0, yaw: 0, pitch: 0,
 				walk: false, dragging: false, lx: 0, ly: 0,
-				legs: null, stations: [], near: null
+				legs: null, stations: [], near: null,
+				tipUntil: 0
 			};
 
 			function makeCarData(i, col, n) {
@@ -2833,7 +2834,10 @@ const truckBody = (() => {
 				}
 				fp.walk = false;
 				fp.near = null;
-				document.getElementById('fpPrompt').textContent = 'Walk to COLOR · NUMBER · WEIGHT stations — door to race';
+				fp.tipUntil = performance.now() + 10000;
+				const pr0 = document.getElementById('fpPrompt');
+				pr0.textContent = 'Walk to COLOR · NUMBER · WEIGHT stations — door to race';
+				pr0.style.display = 'block';
 				document.getElementById('fpUse').style.display = 'none';
 			}
 
@@ -3696,12 +3700,20 @@ const truckBody = (() => {
 					const pr = document.getElementById('fpPrompt');
 					const ub = document.getElementById('fpUse');
 					if (best) {
+						pr.style.display = 'block';
 						pr.textContent = best.id === 'door' ? 'Race options' : ('Change ' + best.label);
 						ub.style.display = 'block';
 						ub.textContent = best.id === 'door' ? 'Open race menu' : ('Use ' + best.label);
 					} else {
-						pr.textContent = 'Walk to COLOR · NUMBER · WEIGHT — door to race';
 						ub.style.display = 'none';
+						// Intro tip fades after ~10s so the view stays clean
+						if (performance.now() < fp.tipUntil) {
+							pr.style.display = 'block';
+							pr.textContent = 'Walk to COLOR · NUMBER · WEIGHT stations — door to race';
+						} else {
+							pr.style.display = 'none';
+							pr.textContent = '';
+						}
 					}
 				}
 				// camera
