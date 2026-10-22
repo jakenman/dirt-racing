@@ -2546,7 +2546,29 @@ const truckBody = (() => {
 				const wallCol = PLAYER_SETUP.wallColor || 0x4a4a52;
 				const wallM = new THREE.MeshStandardMaterial({ color: wallCol, roughness: 0.88, metalness: 0.08 });
 				garageG.userData.wallM = wallM;
-				// walls (open +Z door side)
+				// Stone brick texture for exterior cladding
+				const brickTex = cvTex(256, 256, (x, w, h) => {
+					x.fillStyle = '#6a5a4a';
+					x.fillRect(0, 0, w, h);
+					const bw = 32, bh = 16;
+					for (let row = 0; row < h / bh; row++) {
+						const off = (row % 2) * (bw / 2);
+						for (let col = -1; col < w / bw + 1; col++) {
+							const px = col * bw + off;
+							const py = row * bh;
+							const v = 0.75 + Math.random() * 0.25;
+							x.fillStyle = `rgb(${Math.floor(95*v)},${Math.floor(80*v)},${Math.floor(65*v)})`;
+							x.fillRect(px + 1, py + 1, bw - 2, bh - 2);
+							x.fillStyle = 'rgba(40,30,25,0.35)';
+							x.fillRect(px, py, bw, 1);
+							x.fillRect(px, py, 1, bh);
+						}
+					}
+				});
+				brickTex.wrapS = brickTex.wrapT = THREE.RepeatWrapping;
+				brickTex.repeat.set(6, 3);
+				const brickM = new THREE.MeshStandardMaterial({ map: brickTex, roughness: 0.95, metalness: 0.02 });
+				// Interior walls
 				const back = new THREE.Mesh(new THREE.BoxGeometry(GW, GH, 0.4), wallM);
 				back.position.set(0, GH / 2, -GD / 2);
 				garageG.add(back);
@@ -2556,6 +2578,20 @@ const truckBody = (() => {
 				const right = new THREE.Mesh(new THREE.BoxGeometry(0.4, GH, GD), wallM);
 				right.position.set(GW / 2, GH / 2, 0);
 				garageG.add(right);
+				// Exterior stone brick cladding (slightly outside)
+				const brickBack = new THREE.Mesh(new THREE.BoxGeometry(GW + 0.6, GH, 0.35), brickM);
+				brickBack.position.set(0, GH / 2, -GD / 2 - 0.35);
+				garageG.add(brickBack);
+				const brickLeft = new THREE.Mesh(new THREE.BoxGeometry(0.35, GH, GD + 0.4), brickM);
+				brickLeft.position.set(-GW / 2 - 0.35, GH / 2, -0.1);
+				garageG.add(brickLeft);
+				const brickRight = new THREE.Mesh(new THREE.BoxGeometry(0.35, GH, GD + 0.4), brickM);
+				brickRight.position.set(GW / 2 + 0.35, GH / 2, -0.1);
+				garageG.add(brickRight);
+				// Front facade wings in brick
+				const brickWing = (GW - 10) / 2;
+				garageG.add(new THREE.Mesh(new THREE.BoxGeometry(brickWing + 0.2, GH, 0.35), brickM).translateX(-GW / 2 + brickWing / 2).translateY(GH / 2).translateZ(GD / 2 + 0.25));
+				garageG.add(new THREE.Mesh(new THREE.BoxGeometry(brickWing + 0.2, GH, 0.35), brickM).translateX(GW / 2 - brickWing / 2).translateY(GH / 2).translateZ(GD / 2 + 0.25));
 				// front walls with door gap
 				const doorW = 10;
 				const wing = (GW - doorW) / 2;
@@ -3093,7 +3129,7 @@ const truckBody = (() => {
 					console.warn('drive setup', err);
 				}
 				// FORCE overhead every time — even if setup partially failed
-				const cx = (GARAGE_POS.x || 0) + 45, cy = 65, cz = (GARAGE_POS.z || -180) + 40;
+				const cx = (GARAGE_POS.x || 0) + 26, cy = 30, cz = (GARAGE_POS.z || -180) + 34;
 				const lx = GARAGE_POS.x || 0, ly = 3, lz = (GARAGE_POS.z || -180) + 8;
 				driveCamPos.set(cx, cy, cz);
 				driveCamLook.set(lx, ly, lz);
@@ -3657,49 +3693,69 @@ const truckBody = (() => {
 						if (!garageG) buildGarageWorld();
 						const dL = garageG && garageG.userData.doorL;
 						const dR = garageG && garageG.userData.doorR;
+						const startS = getStartS();
+						// Merge onto track BEHIND the start line, then roll up to it
+						const mergeS = ((startS - PER * 0.35) % PER + PER) % PER;
+						const endS = ((startS - 4) % PER + PER) % PER;
 						let carX = GARAGE_POS.x, carZ = GARAGE_POS.z - 1, carH = 0;
-						let cx = GARAGE_POS.x + 45, cy = 65, cz = GARAGE_POS.z + 40;
-						let lx = GARAGE_POS.x, ly = 3, lz = GARAGE_POS.z + 8;
-						if (driveT < 2.5) {
-							const u = Math.min(1, driveT / 2.5);
+						// Lower angled "blimp" default — not straight down
+						let cx = GARAGE_POS.x + 28, cy = 32, cz = GARAGE_POS.z + 36;
+						let lx = GARAGE_POS.x, ly = 2, lz = GARAGE_POS.z + 6;
+
+						if (driveT < 2.2) {
+							// Doors open
+							const u = Math.min(1, driveT / 2.2);
 							const e = u * u * (3 - 2 * u);
 							if (dL) dL.rotation.y = e * 1.6;
 							if (dR) dR.rotation.y = -e * 1.6;
 							msg.textContent = 'Garage door opening…';
 							msg.style.display = 'block';
-						} else if (driveT < 5.5) {
+							cx = GARAGE_POS.x + 26; cy = 30; cz = GARAGE_POS.z + 34;
+							lx = GARAGE_POS.x; ly = 3; lz = GARAGE_POS.z + 8;
+						} else if (driveT < 5.0) {
+							// Pull out of garage toward track merge point (not a long straight across the map)
 							if (dL) dL.rotation.y = 1.6;
 							if (dR) dR.rotation.y = -1.6;
 							msg.textContent = 'Pulling out…';
-							const u = Math.min(1, (driveT - 2.5) / 3.0);
+							const u = Math.min(1, (driveT - 2.2) / 2.8);
 							const e = u * u * (3 - 2 * u);
-							const entry = cl(getStartS(), 0);
+							const merge = cl(mergeS, 0);
 							const x0 = GARAGE_POS.x, z0 = GARAGE_POS.z - 1;
-							const x1 = GARAGE_POS.x, z1 = GARAGE_POS.z + 16;
-							if (e < 0.4) {
-								const t = e / 0.4;
-								carX = x0 + (x1 - x0) * t; carZ = z0 + (z1 - z0) * t;
+							const x1 = GARAGE_POS.x, z1 = GARAGE_POS.z + 14;
+							// short hop out the door, then curve toward merge
+							if (e < 0.35) {
+								const t = e / 0.35;
+								carX = x0 + (x1 - x0) * t;
+								carZ = z0 + (z1 - z0) * t;
+								carH = 0;
 							} else {
-								const t = (e - 0.4) / 0.6;
-								carX = x1 + (entry.x - x1) * t; carZ = z1 + (entry.z - z1) * t;
+								const t = (e - 0.35) / 0.65;
+								// ease toward track heading
+								carX = x1 + (merge.x - x1) * t;
+								carZ = z1 + (merge.z - z1) * t;
+								const th = Math.atan2(merge.tx, merge.tz);
+								carH = th * t; // blend toward track direction
 							}
-							carH = Math.atan2(entry.x - x0, entry.z - z0);
-							cx = carX + 38; cy = 55; cz = carZ + 38;
-							lx = carX; ly = 2; lz = carZ;
+							cx = carX + 22; cy = 28; cz = carZ + 30;
+							lx = carX; ly = 1.5; lz = carZ;
 						} else {
-							msg.textContent = 'First one on track…';
+							// ON THE OVAL — follow spline from merge up to just before start line
 							if (dL) dL.rotation.y = 1.6;
 							if (dR) dR.rotation.y = -1.6;
-							const lapT = driveT - 5.5;
-							const speed = 26;
-							drivePathS = ((getStartS() + speed * lapT) % PER + PER) % PER;
+							msg.textContent = 'Rolling to the start…';
+							const lapT = driveT - 5.0;
+							// Distance along arc from mergeS toward endS (about 35% of lap)
+							const arcLen = PER * 0.35;
+							const dist = Math.min(arcLen, 24 * lapT);
+							drivePathS = ((mergeS + dist) % PER + PER) % PER;
 							const pos = cl(drivePathS, 0);
 							carX = pos.x; carZ = pos.z;
 							carH = Math.atan2(pos.tx, pos.tz);
-							cx = carX - pos.tx * 30 + pos.nx * 15;
-							cy = 50;
-							cz = carZ - pos.tz * 30 + pos.nz * 15;
-							lx = carX; ly = 1.5; lz = carZ;
+							// follow cam: slightly above and behind, angled down
+							cx = carX - pos.tx * 24 + pos.nx * 10;
+							cy = 26;
+							cz = carZ - pos.tz * 24 + pos.nz * 10;
+							lx = carX + pos.tx * 6; ly = 1.2; lz = carZ + pos.tz * 6;
 							if (driveFollowers.length === 0) {
 								for (let i = 0; i < Math.min(6, COLORS.length - 1); i++) {
 									const [col, num] = COLORS[i + 1] || [0xffffff, String(i + 2)];
@@ -3707,7 +3763,7 @@ const truckBody = (() => {
 									const r = mesh.g.getObjectByName('driverRig');
 									if (r) r.visible = true;
 									scene.add(mesh.g);
-									driveFollowers.push({ mesh, lag: 16 + i * 12, lane: (i % 2 ? 3.2 : -3.2) });
+									driveFollowers.push({ mesh, lag: 14 + i * 11, lane: (i % 2 ? 3.2 : -3.2) });
 								}
 							}
 							for (const f of driveFollowers) {
@@ -3716,10 +3772,12 @@ const truckBody = (() => {
 								f.mesh.g.position.set(p.x, 0.15, p.z);
 								f.mesh.g.rotation.y = Math.atan2(p.tx, p.tz);
 							}
-							if (speed * lapT > PER * 0.5) {
+							// End right before the starting line
+							if (dist >= arcLen - 2) {
 								if (driveCar) {
-									driveCar.g.position.set(carX, 0.15, carZ);
-									driveCar.g.rotation.y = carH;
+									const fin = cl(endS, 0);
+									driveCar.g.position.set(fin.x, 0.15, fin.z);
+									driveCar.g.rotation.y = Math.atan2(fin.tx, fin.tz);
 								}
 								finishDriveToTrack();
 								ren.render(scene, cam);
@@ -3734,14 +3792,13 @@ const truckBody = (() => {
 						cam.position.set(cx, cy, cz);
 						cam.up.set(0, 1, 0);
 						cam.lookAt(lx, ly, lz);
-						cam.fov = 45;
+						cam.fov = 48;
 						cam.near = 1;
 						cam.far = 1200;
 						cam.updateProjectionMatrix();
 					} catch (err) {
 						console.warn('cine', err);
-						// still force overhead so we never freeze in FP
-						const C = window.__cineCam || { cx: 45, cy: 65, cz: -140, lx: 0, ly: 3, lz: -172 };
+						const C = window.__cineCam || { cx: 28, cy: 32, cz: -145, lx: 0, ly: 3, lz: -172 };
 						cam.position.set(C.cx, C.cy, C.cz);
 						cam.lookAt(C.lx, C.ly, C.lz);
 					}
