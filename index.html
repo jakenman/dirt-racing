@@ -2178,6 +2178,14 @@ const truckBody = (() => {
 				try { localStorage.setItem('dirtStandings', JSON.stringify(list)); } catch (e) {}
 			}
 			let SEASON = loadStandings();
+			const PROGRAM = {
+				active: false,
+				awaiting: null, // 'feature' after heat, null when done
+				playerDmg: 0,
+				playerPull: 0,
+				playerTire: 1,
+				spares: { wing: true, tire: true, body: true }
+			};
 			function awardFeaturePoints(order) {
 				// Classic dirt points: 10, 9, 8... for feature finish
 				order.forEach((car, i) => {
@@ -2335,8 +2343,17 @@ const truckBody = (() => {
 					spawnMeshes(cars);
 					placeCars(cars, getStartS());
 					player = cars[0];
+					applyProgramDamageToPlayer();
 					startCountdown()
-				} else startHeatProgram()
+				} else if (PROGRAM._startFeature) {
+					PROGRAM._startFeature = false;
+					PROGRAM.awaiting = null;
+					startFeature();
+					applyProgramDamageToPlayer();
+				} else {
+					PROGRAM.active = true;
+					startHeatProgram();
+				}
 			}
 
 			function startHeatProgram() {
@@ -2381,6 +2398,13 @@ const truckBody = (() => {
 				return inverted
 			}
 
+			function applyProgramDamageToPlayer() {
+				if (!player) return;
+				player.dmg = PROGRAM.playerDmg || 0;
+				player.pull = PROGRAM.playerPull || 0;
+				player.tire = PROGRAM.playerTire != null ? PROGRAM.playerTire : 1;
+				if (player.mesh) updateDamageVisuals(player, player.pull >= 0 ? 1 : -1);
+			}
 			function startFeature() {
 				phase = 'feature';
 				raceLaps = 18;
@@ -2829,10 +2853,59 @@ const truckBody = (() => {
 				makeStation('floor', 'FLOOR', 12, 2, 0x888888);
 				// Race poles beside the door (not blocking the opening)
 				makeStation('quick', 'QUICK', -5.5, 12.5, 0x66aaee);
-				makeStation('full', 'FULL SHOW', 5.5, 12.5, 0xffd23f);
-				// Points board on the wall behind the poles
+				makeStation('full', PROGRAM.awaiting === 'feature' ? 'CONTINUE' : 'FULL SHOW', 5.5, 12.5, 0xffd23f);
+				// Spare parts on the shop floor (swap when damaged)
+				placeSpareParts(garageG);
 				buildPointsBoard(garageG);
 				scene.add(garageG);
+			}
+
+			
+			function placeSpareParts(root) {
+				const spares = [];
+				function addSpare(id, label, lx, lz, builder) {
+					const g = new THREE.Group();
+					g.position.set(lx, 0, lz);
+					builder(g);
+					const cv = document.createElement('canvas');
+					cv.width = 256; cv.height = 64;
+					const cx = cv.getContext('2d');
+					cx.fillStyle = 'rgba(0,0,0,0.85)';
+					cx.fillRect(0, 0, 256, 64);
+					cx.fillStyle = PROGRAM.spares[id] ? '#7dffa0' : '#888';
+					cx.font = 'bold 24px Arial';
+					cx.textAlign = 'center';
+					cx.fillText(PROGRAM.spares[id] ? label : (label + ' USED'), 128, 40);
+					const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false }));
+					sp.scale.set(2.4, 0.6, 1);
+					sp.position.y = 1.6;
+					g.add(sp);
+					root.add(g);
+					fp.stations.push({ id: 'spare_' + id, label: label, local: { x: lx, z: lz }, mesh: g, spareId: id });
+				}
+				// Spare wing
+				addSpare('wing', 'SPARE WING', -8, 4, (g) => {
+					const w = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 1.2), mat(0xcccccc));
+					w.position.y = 0.5;
+					w.rotation.y = 0.3;
+					g.add(w);
+					g.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), mat(0x444)).translateY(0.25));
+				});
+				// Spare tire
+				addSpare('tire', 'SPARE TIRE', -5, 5.5, (g) => {
+					const t = new THREE.Mesh(
+						new THREE.TorusGeometry(0.4, 0.16, 8, 14),
+						new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.95 })
+					);
+					t.rotation.x = Math.PI / 2;
+					t.position.y = 0.4;
+					g.add(t);
+				});
+				// Body / panel kit
+				addSpare('body', 'BODY KIT', -2, 4.5, (g) => {
+					g.add(new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 0.4), mat(0x888890)).translateY(0.35));
+					g.add(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.15, 0.5), mat(0x666)).translateY(0.7));
+				});
 			}
 
 			function buildPointsBoard(root) {
@@ -2949,6 +3022,15 @@ const truckBody = (() => {
 				const rig = garageCar.g.getObjectByName('driverRig');
 				if (rig) rig.visible = false;
 				if (garageCar.helmet) garageCar.helmet.visible = false;
+				// Show damage from the race we just ran
+				if (PROGRAM.playerDmg > 0.02) {
+					const fake = {
+						dmg: PROGRAM.playerDmg,
+						pull: PROGRAM.playerPull,
+						mesh: garageCar
+					};
+					updateDamageVisuals(fake, PROGRAM.playerPull >= 0 ? 1 : -1);
+				}
 			}
 
 			function refreshGarageFloor() {
@@ -3185,15 +3267,66 @@ const truckBody = (() => {
 					document.getElementById('fpGoQuick').ontouchend = go;
 					document.getElementById('fpModalClose').onclick = closeFpModal;
 				} else if (st.id === 'full') {
-					openFpModal(`<h2 style="color:#ffd23f;margin:0 0 12px">Full Program</h2>
-						<p style="font-size:13px;opacity:.85;margin-bottom:8px">Heat 1 (you) → Heat 2 (sim) → Feature with inverted lineup. Points go on the board.</p>
-						<p style="font-size:12px;opacity:.7;margin-bottom:12px">${cls==='sprint'?'Sprint':'Truck'} #${PLAYER_SETUP.num||'1'}</p>
-						<button type="button" id="fpGoFull" style="width:100%;background:#ffd23f;color:#000;padding:14px;border:none;border-radius:8px;font-size:15px;font-weight:bold">Start Full Show</button>
-						<button type="button" id="fpModalClose" style="margin-top:12px;width:100%;background:#333;color:#fff;padding:10px;border:none;border-radius:8px">Stay in garage</button>`);
-					const go = (e) => { if (e) { e.preventDefault(); e.stopPropagation(); } closeFpModal(); applySetup(); startDriveToTrack('full'); };
-					document.getElementById('fpGoFull').onclick = go;
-					document.getElementById('fpGoFull').ontouchend = go;
-					document.getElementById('fpModalClose').onclick = closeFpModal;
+					if (PROGRAM.awaiting === 'feature') {
+						openFpModal(`<h2 style="color:#ffd23f;margin:0 0 12px">Continue Program</h2>
+							<p style="font-size:13px;opacity:.85;margin-bottom:8px">Heat done. Repair with spares if you need, then roll to the Feature (inverted lineup).</p>
+							<p style="font-size:12px;opacity:.75;margin-bottom:12px">Damage ${Math.round((PROGRAM.playerDmg||0)*100)}% · Tires ${Math.round((PROGRAM.playerTire||1)*100)}%</p>
+							<button type="button" id="fpGoFull" style="width:100%;background:#ffd23f;color:#000;padding:14px;border:none;border-radius:8px;font-size:15px;font-weight:bold">Continue to Feature →</button>
+							<button type="button" id="fpModalClose" style="margin-top:12px;width:100%;background:#333;color:#fff;padding:10px;border:none;border-radius:8px">Keep repairing</button>`);
+						const go = (e) => {
+							if (e) { e.preventDefault(); e.stopPropagation(); }
+							closeFpModal();
+							applySetup();
+							// Carry repairs into next race via PROGRAM values already updated by swaps
+							startDriveToTrack('full');
+							// After cinematic, initRace must start FEATURE not heat
+							PROGRAM._startFeature = true;
+						};
+						document.getElementById('fpGoFull').onclick = go;
+						document.getElementById('fpGoFull').ontouchend = go;
+						document.getElementById('fpModalClose').onclick = closeFpModal;
+					} else {
+						openFpModal(`<h2 style="color:#ffd23f;margin:0 0 12px">Full Program</h2>
+							<p style="font-size:13px;opacity:.85;margin-bottom:8px">Heat → garage repair → Feature. Points hit the board after the feature.</p>
+							<p style="font-size:12px;opacity:.7;margin-bottom:12px">${cls==='sprint'?'Sprint':'Truck'} #${PLAYER_SETUP.num||'1'}</p>
+							<button type="button" id="fpGoFull" style="width:100%;background:#ffd23f;color:#000;padding:14px;border:none;border-radius:8px;font-size:15px;font-weight:bold">Start Full Show</button>
+							<button type="button" id="fpModalClose" style="margin-top:12px;width:100%;background:#333;color:#fff;padding:10px;border:none;border-radius:8px">Stay in garage</button>`);
+						const go = (e) => {
+							if (e) { e.preventDefault(); e.stopPropagation(); }
+							closeFpModal();
+							applySetup();
+							PROGRAM.spares = { wing: true, tire: true, body: true };
+							PROGRAM.playerDmg = 0;
+							PROGRAM.playerPull = 0;
+							PROGRAM.playerTire = 1;
+							PROGRAM.awaiting = null;
+							PROGRAM._startFeature = false;
+							startDriveToTrack('full');
+						};
+						document.getElementById('fpGoFull').onclick = go;
+						document.getElementById('fpGoFull').ontouchend = go;
+						document.getElementById('fpModalClose').onclick = closeFpModal;
+					}
+				} else if (st.id && st.id.startsWith('spare_')) {
+					const sid = st.spareId || st.id.replace('spare_', '');
+					const labels = { wing: 'Spare Wing', tire: 'Spare Tire', body: 'Body Kit' };
+					const available = PROGRAM.spares[sid];
+					if (!available) {
+						openFpModal(`<h2 style="color:#888;margin:0 0 12px">${labels[sid]||'Spare'}</h2>
+							<p style="font-size:14px;opacity:.85">Already used this night.</p>
+							<button type="button" id="fpModalClose" style="margin-top:12px;width:100%;background:#333;color:#fff;padding:10px;border:none;border-radius:8px">OK</button>`);
+						document.getElementById('fpModalClose').onclick = closeFpModal;
+					} else {
+						openFpModal(`<h2 style="color:#7dffa0;margin:0 0 12px">Swap ${labels[sid]||'Part'}</h2>
+							<p style="font-size:13px;opacity:.85;margin-bottom:12px">Damage ${Math.round((PROGRAM.playerDmg||0)*100)}% · Pull ${((PROGRAM.playerPull||0)*100)|0}% · Tires ${Math.round((PROGRAM.playerTire||1)*100)}%</p>
+							<button type="button" id="fpSwap" style="width:100%;background:#7dffa0;color:#000;padding:14px;border:none;border-radius:8px;font-size:15px;font-weight:bold">Swap it on</button>
+							<button type="button" id="fpModalClose" style="margin-top:12px;width:100%;background:#333;color:#fff;padding:10px;border:none;border-radius:8px">Leave it</button>`);
+						document.getElementById('fpSwap').onclick = () => {
+							applySpareSwap(sid);
+							closeFpModal();
+						};
+						document.getElementById('fpModalClose').onclick = closeFpModal;
+					}
 				}
 			}
 			
@@ -3279,6 +3412,31 @@ const truckBody = (() => {
 				msg.textContent = '';
 				msg.style.display = '';
 				initRace();
+			}
+
+			
+			function applySpareSwap(sid) {
+				if (!PROGRAM.spares[sid]) return;
+				PROGRAM.spares[sid] = false;
+				if (sid === 'wing') {
+					PROGRAM.playerDmg = Math.max(0, PROGRAM.playerDmg - 0.35);
+					PROGRAM.playerPull *= 0.5;
+				} else if (sid === 'tire') {
+					PROGRAM.playerTire = Math.min(1, PROGRAM.playerTire + 0.55);
+					PROGRAM.playerDmg = Math.max(0, PROGRAM.playerDmg - 0.08);
+				} else if (sid === 'body') {
+					PROGRAM.playerDmg = Math.max(0, PROGRAM.playerDmg - 0.4);
+					PROGRAM.playerPull *= 0.25;
+				}
+				// Refresh car + labels
+				spawnGarageCar();
+				if (garageG) {
+					// rebuild spare labels by rebuilding stations is heavy — just repaint via openGarage pieces
+					scene.remove(garageG);
+					garageG = null;
+					buildGarageWorld();
+					spawnGarageCar();
+				}
 			}
 
 			function leaveFpGarage() {
@@ -3427,6 +3585,7 @@ const truckBody = (() => {
 			};
 			document.getElementById('resGarage').onclick = () => {
 				document.getElementById('res').style.display = 'none';
+				state = 'menu';
 				openGarage(cls || 'sprint');
 			};
 			document.getElementById('pSprint').onclick = () => openGarage('sprint');
@@ -4044,9 +4203,21 @@ const truckBody = (() => {
 						document.getElementById('resTitle').textContent = 'Heat Results';
 						document.getElementById('resSub').textContent =
 							'Heat 1 live · Heat 2 simulated · Lineup inverted for the Feature';
-						document.getElementById('nextPhase').style.display = 'block';
-						document.getElementById('again').style.display = 'block';
-						document.getElementById('again').textContent = 'Restart Heat';
+						// Full program: go repair in garage before feature
+						document.getElementById('nextPhase').style.display = 'none';
+						document.getElementById('again').style.display = 'none';
+						const rg = document.getElementById('resGarage');
+						rg.style.display = 'block';
+						rg.textContent = 'Continue to Garage →';
+						rg.style.background = '#ffd23f';
+						rg.style.color = '#000';
+						if (player) {
+							PROGRAM.active = true;
+							PROGRAM.awaiting = 'feature';
+							PROGRAM.playerDmg = player.dmg || 0;
+							PROGRAM.playerPull = player.pull || 0;
+							PROGRAM.playerTire = player.tire != null ? player.tire : 1;
+						}
 						const lineup = buildFeatureLineup();
 						let html =
 							'<tr><td colspan="5" style="color:#ffd23f;font-weight:bold;padding-top:8px">HEAT 1</td></tr><tr><td>Pos</td><td>Driver</td><td>Laps</td><td>Time</td><td>Best</td></tr>';
@@ -4079,6 +4250,16 @@ const truckBody = (() => {
 						document.getElementById('nextPhase').style.display = 'none';
 						document.getElementById('again').style.display = 'block';
 						document.getElementById('again').textContent = 'Restart Race';
+						const rg2 = document.getElementById('resGarage');
+						rg2.style.display = 'block';
+						rg2.textContent = raceMode === 'full' ? 'Back to Garage' : 'Garage Setup';
+						rg2.style.background = '#4a7';
+						rg2.style.color = '#fff';
+						if (raceMode === 'full') {
+							PROGRAM.active = false;
+							PROGRAM.awaiting = null;
+							// keep spares as-is for next night (refresh on new full start)
+						}
 						document.getElementById('rt').innerHTML =
 							'<tr><td>Pos</td><td>Driver</td><td>Laps</td><td>Time</td><td>Best lap</td></tr>' +
 							order.map((c, i) =>
@@ -4178,8 +4359,16 @@ const truckBody = (() => {
 							pr.textContent = 'Quick Race (10 laps)';
 							ub.textContent = 'Start Quick Race';
 						} else if (best.id === 'full') {
-							pr.textContent = 'Full Program — Heats + Feature';
-							ub.textContent = 'Start Full Show';
+							if (PROGRAM.awaiting === 'feature') {
+								pr.textContent = 'Continue to Feature';
+								ub.textContent = 'Continue Program';
+							} else {
+								pr.textContent = 'Full Program — Heats + Feature';
+								ub.textContent = 'Start Full Show';
+							}
+						} else if (best.id && best.id.startsWith('spare_')) {
+							pr.textContent = best.label || 'Spare part';
+							ub.textContent = PROGRAM.spares[best.spareId] ? 'Swap' : 'Used';
 						} else {
 							pr.textContent = 'Change ' + best.label;
 							ub.textContent = 'Use ' + best.label;
