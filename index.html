@@ -436,13 +436,15 @@
 		<div id="fpPrompt" style="position:absolute;bottom:120px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);color:#ffd23f;padding:10px 16px;border-radius:10px;font-size:15px;text-align:center;max-width:90%;pointer-events:none"></div>
 		<button type="button" id="fpUse" style="display:none;position:absolute;bottom:100px;left:50%;transform:translateX(-50%);pointer-events:auto;background:#ffd23f;color:#000;border:none;border-radius:12px;padding:14px 28px;font-weight:bold;font-size:16px;min-width:160px;z-index:2">Use</button>
 		<!-- Look left/right -->
-		<button type="button" id="fpLookL" style="position:absolute;bottom:28px;left:16px;width:64px;height:64px;border-radius:50%;pointer-events:auto;background:rgba(40,40,50,.92);color:#fff;border:2px solid #888;font-weight:bold;font-size:22px">◀</button>
-		<button type="button" id="fpLookR" style="position:absolute;bottom:28px;left:88px;width:64px;height:64px;border-radius:50%;pointer-events:auto;background:rgba(40,40,50,.92);color:#fff;border:2px solid #888;font-weight:bold;font-size:22px">▶</button>
+		<button type="button" id="fpLookU" style="position:absolute;bottom:100px;left:52px;width:56px;height:56px;border-radius:50%;pointer-events:auto;background:rgba(40,40,50,.92);color:#fff;border:2px solid #888;font-weight:bold;font-size:18px">▲</button>
+		<button type="button" id="fpLookL" style="position:absolute;bottom:28px;left:16px;width:56px;height:56px;border-radius:50%;pointer-events:auto;background:rgba(40,40,50,.92);color:#fff;border:2px solid #888;font-weight:bold;font-size:18px">◀</button>
+		<button type="button" id="fpLookD" style="position:absolute;bottom:28px;left:52px;width:56px;height:56px;border-radius:50%;pointer-events:auto;background:rgba(40,40,50,.92);color:#fff;border:2px solid #888;font-weight:bold;font-size:18px">▼</button>
+		<button type="button" id="fpLookR" style="position:absolute;bottom:28px;left:88px;width:56px;height:56px;border-radius:50%;pointer-events:auto;background:rgba(40,40,50,.92);color:#fff;border:2px solid #888;font-weight:bold;font-size:18px">▶</button>
 		<!-- Walk forward/back -->
 		<button type="button" id="fpWalk" style="position:absolute;bottom:100px;right:16px;width:68px;height:68px;border-radius:50%;pointer-events:auto;background:rgba(255,210,63,.95);color:#000;border:3px solid #fff;font-weight:bold;font-size:12px">FWD</button>
 		<button type="button" id="fpWalkBack" style="position:absolute;bottom:28px;right:16px;width:68px;height:68px;border-radius:50%;pointer-events:auto;background:rgba(200,180,60,.9);color:#000;border:3px solid #fff;font-weight:bold;font-size:12px">BACK</button>
 		<button type="button" id="fpBack" style="position:absolute;top:12px;left:12px;pointer-events:auto;background:rgba(0,0,0,.7);color:#fff;border:1px solid #666;border-radius:8px;padding:10px 14px;font-size:14px">← Menu</button>
-		<div style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,.55);color:#ccc;padding:6px 10px;border-radius:8px;font-size:11px;max-width:150px;text-align:right">◀ ▶ look · FWD/BACK walk</div>
+		<div style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,.55);color:#ccc;padding:6px 10px;border-radius:8px;font-size:11px;max-width:150px;text-align:right">◀▶▲▼ look · FWD/BACK walk</div>
 	</div>
 	<div id="fpModal" style="display:none;position:fixed;inset:0;z-index:7;background:rgba(0,0,0,.7);align-items:center;justify-content:center;pointer-events:auto">
 		<div id="fpModalBox" style="background:#1a1a1e;color:#fff;border-radius:14px;padding:18px;max-width:340px;width:92%;max-height:80vh;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid #444"></div>
@@ -2181,7 +2183,7 @@ const truckBody = (() => {
 			// First-person garage walk (mobile-friendly)
 			const fp = {
 				x: 0, z: 0, yaw: 0, pitch: 0,
-				walk: false, walkBack: false, lookL: false, lookR: false,
+				walk: false, walkBack: false, lookL: false, lookR: false, lookU: false, lookD: false,
 				legs: null, stations: [], near: null,
 				tipUntil: 0
 			};
@@ -2566,23 +2568,35 @@ const truckBody = (() => {
 				const doorTop = new THREE.Mesh(new THREE.BoxGeometry(doorW + 0.4, 0.4, 0.4), wallM);
 				doorTop.position.set(0, GH - 0.2, GD / 2);
 				garageG.add(doorTop);
-				// Solid garage door — lifts straight up on race exit
-				const doorMat = new THREE.MeshStandardMaterial({ color: 0x6a6a72, metalness: 0.5, roughness: 0.35 });
-				const panelH = GH - 0.6;
-				const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.15, panelH, 0.18), doorMat);
-				doorPanel.name = 'garageDoor';
-				doorPanel.position.set(0, panelH / 2 + 0.15, GD / 2 - 0.15);
-				// window band
-				const win = new THREE.Mesh(
-					new THREE.PlaneGeometry(doorW - 1.2, 0.5),
-					new THREE.MeshStandardMaterial({ color: 0x99bbee, transparent: true, opacity: 0.5, metalness: 0.2, roughness: 0.2 })
-				);
-				win.position.set(0, panelH * 0.25, 0.1);
-				doorPanel.add(win);
-				garageG.add(doorPanel);
-				garageG.userData.door = doorPanel;
-				garageG.userData.doorBaseY = panelH / 2 + 0.15;
-				garageG.userData.doorOpenY = panelH / 2 + 0.15 + panelH + 0.4;
+				// Hinged double doors — swing open on race exit (reads clearly on mobile)
+				const doorMat = new THREE.MeshStandardMaterial({ color: 0xc4a035, metalness: 0.35, roughness: 0.4 });
+				const panelH = GH - 0.5;
+				const halfW = (doorW - 0.2) / 2;
+				const doorRoot = new THREE.Group();
+				doorRoot.name = 'garageDoor';
+				doorRoot.position.set(0, 0, GD / 2 - 0.2);
+				function makeLeaf(side) {
+					// pivot at outer edge
+					const pivot = new THREE.Group();
+					pivot.position.set(side * halfW, 0, 0);
+					const leaf = new THREE.Mesh(new THREE.BoxGeometry(halfW, panelH, 0.16), doorMat);
+					leaf.position.set(-side * halfW / 2, panelH / 2 + 0.1, 0);
+					pivot.add(leaf);
+					const win = new THREE.Mesh(
+						new THREE.PlaneGeometry(halfW * 0.55, 0.45),
+						new THREE.MeshBasicMaterial({ color: 0xaaccff })
+					);
+					win.position.set(-side * halfW / 2, panelH * 0.65, 0.09);
+					pivot.add(win);
+					doorRoot.add(pivot);
+					return pivot;
+				}
+				const doorL = makeLeaf(-1);
+				const doorR = makeLeaf(1);
+				garageG.add(doorRoot);
+				garageG.userData.doorL = doorL;
+				garageG.userData.doorR = doorR;
+				garageG.userData.door = doorRoot;
 				// roof
 				const roof = new THREE.Mesh(
 					new THREE.BoxGeometry(GW + 1, 0.3, GD + 1),
@@ -3053,7 +3067,7 @@ const truckBody = (() => {
 				const rig = driveCar.g.getObjectByName('driverRig');
 				if (rig) rig.visible = true;
 				if (driveCar.helmet) driveCar.helmet.visible = true;
-				driveFrom = { x: GARAGE_POS.x, z: GARAGE_POS.z + 2 };
+				driveFrom = { x: GARAGE_POS.x, z: GARAGE_POS.z + 11 };
 				const ss = getStartS();
 				const sp = cl(ss, 0);
 				driveTo = { x: sp.x, z: sp.z, h: Math.atan2(sp.tx, sp.tz) };
@@ -3153,6 +3167,8 @@ const truckBody = (() => {
 			holdBtn('fpWalkBack', () => { fp.walkBack = true; }, () => { fp.walkBack = false; });
 			holdBtn('fpLookL', () => { fp.lookL = true; }, () => { fp.lookL = false; });
 			holdBtn('fpLookR', () => { fp.lookR = true; }, () => { fp.lookR = false; });
+			holdBtn('fpLookU', () => { fp.lookU = true; }, () => { fp.lookU = false; });
+			holdBtn('fpLookD', () => { fp.lookD = true; }, () => { fp.lookD = false; });
 			document.getElementById('fpBack').onclick = () => {
 				leaveFpGarage();
 				state = 'menu';
@@ -3760,25 +3776,29 @@ const truckBody = (() => {
 				// Short drive from garage → track (cinematic, mobile-safe)
 				if (state === 'driveToTrack' && driveCar) {
 					driveT += dt;
-					const door = garageG && garageG.userData.door;
-					const baseY = garageG && garageG.userData.doorBaseY != null ? garageG.userData.doorBaseY : 4;
-					const openY = garageG && garageG.userData.doorOpenY != null ? garageG.userData.doorOpenY : 12;
-					// Phase 1: door lifts (~1.8s) — camera watches the door
-					if (driveT < 1.8) {
-						const u = Math.min(1, driveT / 1.8);
+					const dL = garageG && garageG.userData.doorL;
+					const dR = garageG && garageG.userData.doorR;
+					// Phase 1: doors swing open (~2s) — camera inside looking at door
+					if (driveT < 2.0) {
+						const u = Math.min(1, driveT / 2.0);
 						const e = u * u * (3 - 2 * u);
-						if (door) door.position.y = baseY + (openY - baseY) * e;
+						const ang = e * (Math.PI * 0.92); // almost 90° open
+						if (dL) dL.rotation.y = ang;
+						if (dR) dR.rotation.y = -ang;
 						msg.textContent = 'Garage door opening…';
-						const cx = GARAGE_POS.x, cz = GARAGE_POS.z + 4;
-						cam.position.set(cx, 3.5, cz + 14);
+						if (msg.style) msg.style.display = 'block';
+						// Stand behind the car, watch doors
+						const cx = GARAGE_POS.x, cz = GARAGE_POS.z - 4;
+						cam.position.set(cx, 2.8, cz);
 						cam.up.set(0, 1, 0);
-						cam.lookAt(cx, 3.0, GARAGE_POS.z + 12);
-						cam.fov = 55;
+						cam.lookAt(cx, 2.2, GARAGE_POS.z + 12);
+						cam.fov = 60;
 						cam.updateProjectionMatrix();
 					} else {
-						if (door) door.position.y = openY;
+						if (dL) dL.rotation.y = Math.PI * 0.92;
+						if (dR) dR.rotation.y = -Math.PI * 0.92;
 						msg.textContent = 'Heading to the track…';
-						const t = Math.min(1, (driveT - 1.8) / 4.0);
+						const t = Math.min(1, (driveT - 2.0) / 4.0);
 						const e = t * t * (3 - 2 * t);
 						const x = driveFrom.x + (driveTo.x - driveFrom.x) * e;
 						const z = driveFrom.z + (driveTo.z - driveFrom.z) * e;
@@ -3808,6 +3828,8 @@ const truckBody = (() => {
 					const turnSp = 2.1;
 					if (fp.lookL || K.KeyA || K.ArrowLeft) fp.yaw += turnSp * dt;
 					if (fp.lookR || K.KeyD || K.ArrowRight) fp.yaw -= turnSp * dt;
+					if (fp.lookU) fp.pitch = Math.min(0.85, fp.pitch + 1.5 * dt);
+					if (fp.lookD) fp.pitch = Math.max(-1.15, fp.pitch - 1.5 * dt);
 					// Clamp to large garage interior (local space, rot=0)
 					let lx = fp.x - GARAGE_POS.x;
 					let lz = fp.z - GARAGE_POS.z;
