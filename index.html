@@ -2429,7 +2429,27 @@ const truckBody = (() => {
 				tState = 0;
 				raceT = 0;
 				finishOrder = [];
-				document.getElementById('res').style.display = 'none'
+				document.getElementById('res').style.display = 'none';
+				document.getElementById('menu').style.display = 'none';
+				document.getElementById('garage').style.display = 'none';
+				document.getElementById('fpHud').style.display = 'none';
+				// Lap / pos HUD + wear back on
+				const hud = document.getElementById('hud');
+				hud.style.display = 'block';
+				const wear = document.getElementById('wear');
+				if (wear) wear.style.display = 'block';
+				const spd = document.getElementById('spd');
+				if (spd) spd.style.display = 'block';
+				// Controls stay hidden until 3 seconds to go
+				setTouchUI(false);
+				document.querySelectorAll('.tb').forEach(b => { b.style.display = 'none'; b.style.visibility = 'hidden'; });
+				msg.style.display = 'block';
+				msg.textContent = '5';
+				// Yellow flag until green
+				if (window.__raceFlags) {
+					if (window.__raceFlags.yellow) window.__raceFlags.yellow.visible = true;
+					if (window.__raceFlags.green) window.__raceFlags.green.visible = false;
+				}
 			}
 			let allDrivers = [],
 				player, state, tState, raceT, finishOrder = [];
@@ -3418,7 +3438,7 @@ const truckBody = (() => {
 				}
 				window.__cineCam = null;
 				msg.textContent = '';
-				msg.style.display = '';
+				msg.style.display = 'block';
 				initRace();
 			}
 
@@ -4172,16 +4192,42 @@ const truckBody = (() => {
 				}
 				tState += dt;
 				if (state === 'menu') {} else if (state === 'count') {
-					const n = 3 - Math.floor(tState);
-					msg.textContent = n > 0 ? n : 'GO!';
-					if (tState >= 3) {
-						state = 'race';
-						tState = 0;
-						for (const c of cars) {
-							c.lapStart = 0
+					// 5 · 4 · 3 · 2 · 1 · GREEN — controls appear at 3 seconds to go
+					const left = Math.ceil(5 - tState);
+					if (tState >= 2 && !touchMode) {
+						setTouchUI(true);
+						document.querySelectorAll('.tb').forEach(b => { b.style.display = 'flex'; b.style.visibility = 'visible'; });
+					}
+					if (tState < 5) {
+						msg.style.display = 'block';
+						msg.textContent = left > 0 ? String(left) : 'GREEN!';
+						if (window.__raceFlags) {
+							if (window.__raceFlags.yellow) window.__raceFlags.yellow.visible = true;
+							if (window.__raceFlags.green) window.__raceFlags.green.visible = false;
 						}
 					}
-				} else if (state === 'race' && tState > 1) msg.textContent = '';
+					if (tState >= 5) {
+						state = 'race';
+						tState = 0;
+						msg.textContent = 'GREEN!';
+						msg.style.display = 'block';
+						if (window.__raceFlags) {
+							if (window.__raceFlags.yellow) window.__raceFlags.yellow.visible = false;
+							if (window.__raceFlags.green) window.__raceFlags.green.visible = true;
+						}
+						setTouchUI(true);
+						document.querySelectorAll('.tb').forEach(b => { b.style.display = 'flex'; b.style.visibility = 'visible'; });
+						for (const c of cars) {
+							c.lapStart = 0;
+							c.half = true;
+						}
+					}
+				} else if (state === 'race' && tState > 1.2) {
+					if (msg.textContent === 'GREEN!' || msg.textContent === 'GO!') {
+						msg.textContent = '';
+						msg.style.display = '';
+					}
+				}
 				const steps = 2,
 					h = dt / steps;
 				for (let k = 0; k < steps; k++) {
@@ -4501,7 +4547,7 @@ const truckBody = (() => {
 				const phaseTag = phase === 'heat' ? 'HEAT 1' : (raceMode === 'full' && phase === 'feature' ? 'FEATURE' :
 					'');
 				hud.innerHTML =
-					`${phaseTag?`<span style="color:#ffd23f">${phaseTag}</span><br>`:''}LAP <b>${Math.max(1,Math.min(raceLaps,player.lap))}/${raceLaps}</b><br>POS <b>${pos}/${cars.length}</b><br>Lap ${fmt(state==='count'?0:raceT-player.lapStart)}<br>Last ${fmt(player.last)} · Best ${fmt(player.best)}`;
+					`${phaseTag?`<span style="color:#ffd23f">${phaseTag}</span><br>`:''}LAP <b>${Math.max(1, Math.min(raceLaps, player.lap || 1))}/${raceLaps}</b><br>POS <b>${pos}/${cars.length}</b><br>Lap ${fmt(state==='count'?0:raceT-player.lapStart)}<br>Last ${fmt(player.last)} · Best ${fmt(player.best)}`;
 				const tp = Math.round(player.tire * 100),
 					dp = Math.round(player.dmg * 100);
 				tw.textContent = tp + '%';
