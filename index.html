@@ -2184,7 +2184,8 @@ const truckBody = (() => {
 				playerDmg: 0,
 				playerPull: 0,
 				playerTire: 1,
-				spares: { wing: true, tire: true, body: true }
+				spares: { wing: true, tire: true, body: true },
+				swapsLeft: 2
 			};
 			function awardFeaturePoints(order) {
 				// Classic dirt points: 10, 9, 8... for feature finish
@@ -3296,6 +3297,7 @@ const truckBody = (() => {
 							closeFpModal();
 							applySetup();
 							PROGRAM.spares = { wing: true, tire: true, body: true };
+							PROGRAM.swapsLeft = 2;
 							PROGRAM.playerDmg = 0;
 							PROGRAM.playerPull = 0;
 							PROGRAM.playerTire = 1;
@@ -3310,15 +3312,21 @@ const truckBody = (() => {
 				} else if (st.id && st.id.startsWith('spare_')) {
 					const sid = st.spareId || st.id.replace('spare_', '');
 					const labels = { wing: 'Spare Wing', tire: 'Spare Tire', body: 'Body Kit' };
-					const available = PROGRAM.spares[sid];
-					if (!available) {
+					const available = PROGRAM.spares[sid] && (PROGRAM.swapsLeft == null || PROGRAM.swapsLeft > 0);
+					if (!PROGRAM.spares[sid]) {
 						openFpModal(`<h2 style="color:#888;margin:0 0 12px">${labels[sid]||'Spare'}</h2>
 							<p style="font-size:14px;opacity:.85">Already used this night.</p>
 							<button type="button" id="fpModalClose" style="margin-top:12px;width:100%;background:#333;color:#fff;padding:10px;border:none;border-radius:8px">OK</button>`);
 						document.getElementById('fpModalClose').onclick = closeFpModal;
+					} else if (PROGRAM.swapsLeft != null && PROGRAM.swapsLeft <= 0) {
+						openFpModal(`<h2 style="color:#888;margin:0 0 12px">No swaps left</h2>
+							<p style="font-size:14px;opacity:.85">Only 2 swaps per Full Program — spend them wisely.</p>
+							<button type="button" id="fpModalClose" style="margin-top:12px;width:100%;background:#333;color:#fff;padding:10px;border:none;border-radius:8px">OK</button>`);
+						document.getElementById('fpModalClose').onclick = closeFpModal;
 					} else {
 						openFpModal(`<h2 style="color:#7dffa0;margin:0 0 12px">Swap ${labels[sid]||'Part'}</h2>
-							<p style="font-size:13px;opacity:.85;margin-bottom:12px">Damage ${Math.round((PROGRAM.playerDmg||0)*100)}% · Pull ${((PROGRAM.playerPull||0)*100)|0}% · Tires ${Math.round((PROGRAM.playerTire||1)*100)}%</p>
+							<p style="font-size:13px;opacity:.85;margin-bottom:8px">Damage ${Math.round((PROGRAM.playerDmg||0)*100)}% · Pull ${((PROGRAM.playerPull||0)*100)|0}% · Tires ${Math.round((PROGRAM.playerTire||1)*100)}%</p>
+							<p style="font-size:12px;color:#ffd23f;margin-bottom:12px">${PROGRAM.swapsLeft} swap${PROGRAM.swapsLeft===1?'':'s'} left tonight</p>
 							<button type="button" id="fpSwap" style="width:100%;background:#7dffa0;color:#000;padding:14px;border:none;border-radius:8px;font-size:15px;font-weight:bold">Swap it on</button>
 							<button type="button" id="fpModalClose" style="margin-top:12px;width:100%;background:#333;color:#fff;padding:10px;border:none;border-radius:8px">Leave it</button>`);
 						document.getElementById('fpSwap').onclick = () => {
@@ -3416,8 +3424,9 @@ const truckBody = (() => {
 
 			
 			function applySpareSwap(sid) {
-				if (!PROGRAM.spares[sid]) return;
+				if (!PROGRAM.spares[sid] || (PROGRAM.swapsLeft != null && PROGRAM.swapsLeft <= 0)) return;
 				PROGRAM.spares[sid] = false;
+				if (PROGRAM.swapsLeft != null) PROGRAM.swapsLeft--;
 				if (sid === 'wing') {
 					PROGRAM.playerDmg = Math.max(0, PROGRAM.playerDmg - 0.35);
 					PROGRAM.playerPull *= 0.5;
@@ -3882,72 +3891,108 @@ const truckBody = (() => {
 			}
 
 			function aiDrive(c, dt) {
-				// Kinematic path AI: sit ON the line at real race speed (no laggy blend)
-				const q = c.lineQ != null ? c.lineQ : 5;
+				// Competitive AI: dynamic lines, passes, mistakes — not locked to one groove forever
 				const p = proj(c.x, c.z);
 				if (c.aiS == null || !isFinite(c.aiS)) c.aiS = p.s;
-				const curv = Math.max(curvAt(c.aiS), curvAt(c.aiS + 10));
+				if (c.aiMood == null) c.aiMood = 0.5 + Math.random() * 0.5; // aggression 0-1
+				if (c.aiLineBias == null) c.aiLineBias = (Math.random() - 0.5) * 2.5;
+				if (c.aiMistakeT == null) c.aiMistakeT = 0;
+				if (c.aiPassT == null) c.aiPassT = 0;
+				// Occasional line change / "new idea"
+				c.aiPassT -= dt;
+				if (c.aiPassT <= 0) {
+					c.aiPassT = 2.5 + Math.random() * 5;
+					if (Math.random() < 0.45 + c.aiMood * 0.3) {
+						c.aiLineBias = (Math.random() - 0.5) * 4.2;
+					}
+					// random mistake — lifts, gets tight, loses time
+					if (Math.random() < 0.22 + (1 - (c.skill || 0.95)) * 2) {
+						c.aiMistakeT = 0.6 + Math.random() * 1.4;
+					}
+				}
+				c.aiMistakeT = Math.max(0, c.aiMistakeT - dt);
+				const curv = Math.max(curvAt(c.aiS), curvAt(c.aiS + 8));
 				const inTurn = curv > 0.005;
-				// Player hits ~70-80 mph; leaders 90-100 so they actually compete
-				// Leaders only ~3-4 mph over typical player pace for a fair fight
+				// Pace clustered near the player — leaders only a hair faster
 				const playerPace = cls === 'truck' ? 62 : 70;
-				const targetMph = q === 0 ? playerPace + 4 : q === 1 ? playerPace + 3 : q === 2 ? playerPace + 2 : (playerPace - 1 - Math.min(6, (q - 3) * 1.5));
+				const skill = c.skill != null ? c.skill : 0.95;
+				// Top AI ~+1 mph, mid pack near player, back markers a bit slower + variance
+				const rankBoost = (skill - 0.94) * 40; // ~0 to +2 mph
+				let targetMph = playerPace + rankBoost + (c.aiMood - 0.5) * 1.2;
+				targetMph = Math.min(playerPace + 1.6, Math.max(playerPace - 5, targetMph));
+				if (c.aiMistakeT > 0) targetMph *= 0.82 + Math.random() * 0.06;
+				if (c.tire != null && c.tire < 0.75) targetMph *= 0.92 + c.tire * 0.08;
+				if (c.dmg > 0.2) targetMph *= 1 - c.dmg * 0.12;
 				let tgt = targetMph / 2.237;
-				if (inTurn) tgt *= cls === 'truck' ? 0.93 : 0.97;
+				if (inTurn) tgt *= cls === 'truck' ? 0.92 : 0.955;
 				let brake = 0;
-				let laneNudge = 0;
+				let laneNudge = c.aiLineBias * 0.35;
+				let blocked = false;
+				let passSide = 0;
 				for (const o of cars) {
 					if (o === c || o.done) continue;
-					const dx = o.x - c.x,
-						dz = o.z - c.z,
-						fx = Math.sin(c.h),
-						fz = Math.cos(c.h);
-					const ahead = dx * fx + dz * fz,
-						side = dx * fz - dz * fx;
+					const dx = o.x - c.x, dz = o.z - c.z;
+					const fx = Math.sin(c.h), fz = Math.cos(c.h);
+					const ahead = dx * fx + dz * fz;
+					const side = dx * fz - dz * fx;
 					const dist = Math.hypot(dx, dz);
-					// Hold a gap when someone is ahead in your lane
-					if (ahead > 0.2 && ahead < 7 && Math.abs(side) < 2.4) {
-						brake = Math.max(brake, 0.35 * (1 - ahead / 7));
-						tgt *= 0.85 + 0.15 * (ahead / 7);
+					const oSp = Math.hypot(o.vx || 0, o.vz || 0);
+					// Traffic ahead in our groove — slow or dive
+					if (ahead > 0.3 && ahead < 9 && Math.abs(side) < 2.6) {
+						blocked = true;
+						brake = Math.max(brake, 0.4 * (1 - ahead / 9));
+						tgt *= 0.8 + 0.2 * (ahead / 9);
+						// Try a pass if we're in the mood and they're not way faster
+						if (c.aiMood > 0.4 && ahead < 6 && (c.aiSp || 0) >= oSp * 0.95) {
+							passSide = side >= 0 ? -1 : 1; // go the open side
+							laneNudge += passSide * (1.8 + c.aiMood * 1.2);
+							tgt *= 1.04; // slight push on the move
+						}
 					}
-					// Side-by-side: push to your own lane instead of overlapping
-					if (dist < 5 && Math.abs(ahead) < 3.5 && Math.abs(side) < 3.2) {
-						laneNudge += side > 0 ? -1.1 : 1.1;
+					if (dist < 4.5 && Math.abs(ahead) < 3.2 && Math.abs(side) < 3.0) {
+						laneNudge += side > 0 ? -1.2 : 1.2;
+					}
+					// Someone closing from behind — hold or move over slightly
+					if (ahead < -1 && ahead > -8 && Math.abs(side) < 2.2 && oSp > (c.aiSp || 0) + 1) {
+						if (Math.random() < dt * 0.8) laneNudge += (Math.random() < 0.5 ? 1 : -1) * 0.8;
 					}
 				}
-				// Even launch for everyone: ~3.7s to 60 mph, then ease to race pace
+				// Launch: same for pack
 				const sp60 = 60 / 2.237;
 				if (c.aiSp == null) c.aiSp = 2;
-				const wantSp = Math.max(sp60, tgt * (1 - brake * 0.35));
+				const wantSp = Math.max(sp60 * 0.5, tgt * (1 - brake * 0.4));
 				if (c.aiSp < sp60) {
-					c.aiSp = Math.min(sp60, c.aiSp + (sp60 / 3.7) * dt);
+					c.aiSp = Math.min(sp60, c.aiSp + (sp60 / 3.8) * dt);
 				} else {
-					c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 0.7);
+					c.aiSp += (wantSp - c.aiSp) * Math.min(1, dt * 0.85);
 				}
 				const sp = c.aiSp;
-				// Advance distance along track at true speed
 				c.aiS = ((c.aiS + sp * dt) % PER + PER) % PER;
+				// Base groove from skill rank, then bias + traffic
+				const q = c.lineQ != null ? c.lineQ : 5;
 				let idealLat = racingLine(c.aiS, q) + laneNudge;
-				const latMin = -W / 2 + 2.8,
-					latMax = W / 2 - 2.5;
+				// In turns, preferred low line unless passing high
+				if (inTurn && !passSide) idealLat += -0.4 * (1 - Math.min(1, q / 6));
+				const latMin = -W / 2 + 2.8, latMax = W / 2 - 2.5;
 				idealLat = Math.max(latMin, Math.min(latMax, idealLat));
 				if (c.lane == null || !isFinite(c.lane)) c.lane = idealLat;
-				c.lane += (idealLat - c.lane) * Math.min(1, dt * 2.2);
+				// Slower lane blend = more "human" weave; faster when committed to a pass
+				const laneRate = passSide ? 3.2 : 1.6;
+				c.lane += (idealLat - c.lane) * Math.min(1, dt * laneRate);
 				const pos = cl(c.aiS, c.lane);
 				const path = cl(c.aiS, 0);
 				const pathH = Math.atan2(path.tx, path.tz);
-				// SNAP to line — this was the bug (old soft blend made them crawl at ~10 mph)
 				c.x = pos.x;
 				c.z = pos.z;
 				c.h = pathH;
 				c.vx = path.tx * sp;
 				c.vz = path.tz * sp;
 				c.av = 0;
-				c.steer = 0;
+				c.steer = passSide * 0.3;
 				c.steerv = 0;
-				c.slip = 0;
+				c.slip = c.aiMistakeT > 0 ? 0.35 : (passSide ? 0.12 : 0.04);
 				c.roll *= Math.max(0, 1 - dt * 5);
-				c.tire = Math.max(0.5, (c.tire || 1) - dt * sp * 0.00001);
+				c.tire = Math.max(0.45, (c.tire || 1) - dt * sp * 0.000012 * (1 + Math.abs(passSide) * 0.5));
 			}
 			// note: steer sign: positive st turns right? h increases -> heading rotates toward +x from +z (left turn when viewed from above w/ camera)...
 			function progress(c) {
@@ -4368,7 +4413,7 @@ const truckBody = (() => {
 							}
 						} else if (best.id && best.id.startsWith('spare_')) {
 							pr.textContent = best.label || 'Spare part';
-							ub.textContent = PROGRAM.spares[best.spareId] ? 'Swap' : 'Used';
+							ub.textContent = (!PROGRAM.spares[best.spareId] || (PROGRAM.swapsLeft != null && PROGRAM.swapsLeft <= 0)) ? 'Used' : ('Swap (' + PROGRAM.swapsLeft + ' left)');
 						} else {
 							pr.textContent = 'Change ' + best.label;
 							ub.textContent = 'Use ' + best.label;
