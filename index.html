@@ -689,6 +689,7 @@
 			}
 
 			function proj(x, z) {
+				// Nearest sample + neighbor refine (cuts s/bank jumps that feel like stutter)
 				let bi = 0,
 					bd = 1e18;
 				for (let i = 0; i < M; i++) {
@@ -700,12 +701,24 @@
 						bi = i
 					}
 				}
-				const t = (x - TX[bi]) * TTX[bi] + (z - TZ[bi]) * TTZ[bi],
-					s = bi * STEP + t,
-					p = cl(s);
+				let bestS = bi * STEP,
+					bestD = bd;
+				for (const off of [-1, 0, 1]) {
+					const i = (bi + off + M) % M;
+					const t = (x - TX[i]) * TTX[i] + (z - TZ[i]) * TTZ[i];
+					const s = i * STEP + Math.max(-STEP * 0.5, Math.min(STEP * 0.5, t));
+					const p = cl(s);
+					const dx = x - p.x, dz = z - p.z;
+					const q = dx * dx + dz * dz;
+					if (q < bestD) {
+						bestD = q;
+						bestS = s;
+					}
+				}
+				const p = cl(bestS);
 				const lat = (x - p.x) * p.nx + (z - p.z) * p.nz;
 				return {
-					s: ((s % PER) + PER) % PER,
+					s: ((bestS % PER) + PER) % PER,
 					d: R + lat,
 					nx: p.nx,
 					nz: p.nz
@@ -1754,33 +1767,7 @@ const truckBody = (() => {
 				trunks.count = leaves.count = n;
 				Q.scale.setScalar(1);
 				trackG.add(trunks, leaves);
-				// pit area (infield, back stretch)
-				const ps = PER * 0.5,
-					pp = cl(ps, -W / 2 - 9);
-				if (clear(pp.x, pp.z, 4)) {
-					const pa = Math.atan2(-pp.tz, pp.tx),
-						pit = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(80, PER * 0.12), 10), mat(0x777777));
-					pit.rotation.set(-Math.PI / 2, 0, pa, 'YXZ');
-					pit.rotation.order = 'YXZ';
-					pit.rotation.set(-Math.PI / 2, pa, 0);
-					pit.position.set(pp.x, -0.2, pp.z);
-					trackG.add(pit);
-					for (let i = 0; i < 5; i++) {
-						const q = cl(ps + (i - 2) * 14, -W / 2 - 12);
-						const tr = new THREE.Mesh(new THREE.BoxGeometry(9, 3, 2.6), mat([0xeeeeee, 0x993333, 0x334499][i %
-							3
-						]));
-						tr.position.set(q.x, 1.3, q.z);
-						tr.rotation.y = pa;
-						trackG.add(tr);
-						const tent = new THREE.Mesh(new THREE.ConeGeometry(2.4, 1.6, 4), mat([0xffcc00, 0x22aa55,
-							0xff5522][i % 3]));
-						const q2 = cl(ps + (i - 2) * 14 + 5, -W / 2 - 8);
-						tent.position.set(q2.x, 2.2, q2.z);
-						tent.rotation.y = pa + Math.PI / 4;
-						trackG.add(tent)
-					}
-				}
+				// Infield kept open clay (no pit pad / tents clutter)
 				// Stadium flood towers — bright lamps + soft pools of light
 				for (let i = 0; i < 6; i++) {
 					const q = cl(i * PER / 6 + PER / 12, W / 2 + 24),
@@ -1973,7 +1960,6 @@ const truckBody = (() => {
 				// --- Infield life: ambulance, push trucks, ATV ---
 				function addParked(kind, s, lat, yawOff) {
 					const q = cl(s, lat);
-					if (!clear(q.x, q.z, 3)) return;
 					const a = Math.atan2(-q.tz, q.tx) + (yawOff || 0);
 					const hg = new THREE.Group();
 					if (kind === 'ambulance') {
@@ -2014,13 +2000,18 @@ const truckBody = (() => {
 					hg.rotation.y = a;
 					trackG.add(hg);
 				}
-				const inS = PER * 0.48;
-				addParked('ambulance', inS, -W / 2 - 14, 0.3);
-				addParked('push', inS + 18, -W / 2 - 12, -0.2);
-				addParked('push', inS - 16, -W / 2 - 13, 0.5);
-				addParked('atv', inS + 8, -W / 2 - 16, 1.0);
-				addParked('atv', inS - 8, -W / 2 - 15, -0.8);
-				addParked('push', inS + 35, -W / 2 - 11, 0.1);
+				// Infield: push trucks + ATVs (stationary). Ambulance sits OUTSIDE near turn 4.
+				const mid = PER * 0.5;
+				addParked('push', mid - 25, -W * 0.22, 0.4);
+				addParked('push', mid - 8, -W * 0.28, -0.3);
+				addParked('push', mid + 12, -W * 0.25, 0.6);
+				addParked('push', mid + 30, -W * 0.2, -0.15);
+				addParked('atv', mid - 15, -W * 0.35, 1.2);
+				addParked('atv', mid + 5, -W * 0.38, -0.9);
+				addParked('atv', mid + 20, -W * 0.32, 0.2);
+				// Outside fence off turn 4 (just before start/finish)
+				const t4 = ((getStartS() - PER * 0.06) % PER + PER) % PER;
+				addParked('ambulance', t4, W / 2 + 16, 0.15);
 			}
 
 			// cars
