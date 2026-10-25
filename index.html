@@ -918,13 +918,14 @@
 					x.font = 'bold 20px Arial';
 					x.textAlign = 'center';
 					x.fillText(brand, w / 2, h * 0.9);
-					// HUGE number
+					// HUGE number (shrink a bit for 17a / 45b style)
+					const nStr = String(num);
 					x.lineWidth = 12;
 					x.strokeStyle = '#000';
-					x.font = 'italic bold 78px Impact, Arial Black, Arial';
-					x.strokeText(num, w / 2, h * 0.52);
+					x.font = 'italic bold ' + (nStr.length > 2 ? 62 : 78) + 'px Impact, Arial Black, Arial';
+					x.strokeText(nStr, w / 2, h * 0.52);
 					x.fillStyle = '#fff';
-					x.fillText(num, w / 2, h * 0.52);
+					x.fillText(nStr, w / 2, h * 0.52);
 				}))
 			}
 			const treadTex = cvTex(64, 256, (x, w, h) => {
@@ -2312,11 +2313,49 @@ const truckBody = (() => {
 				})
 			}
 
+			
+			function baseCarNum(n) {
+				return String(n == null ? '' : n).replace(/[^0-9]/g, '') || '0';
+			}
+			// Dirt-style: you keep the number; anyone else on that number becomes 17a, 17b…
+			function resolveFieldNumbers(list) {
+				const player = list.find(d => !d.ai) || list[0];
+				const pBase = baseCarNum(player ? (PLAYER_SETUP.num || player.num) : '1');
+				if (player) {
+					player.num = pBase;
+					PLAYER_SETUP.num = pBase;
+				}
+				const used = {};
+				if (player) used[pBase] = 1; // player owns plain number
+				for (const d of list) {
+					if (player && d === player) continue;
+					let base = baseCarNum(d.num);
+					if (!base) base = String((d.i || 1) * 7);
+					if (!used[base]) {
+						d.num = base;
+						used[base] = 1;
+					} else {
+						const k = used[base]; // 1 -> a, 2 -> b, 3 -> c…
+						const letter = String.fromCharCode(96 + k); // 1=a, 2=b
+						d.num = base + letter;
+						used[base] = k + 1;
+					}
+					// Keep display name in sync when it embeds a #
+					if (d.name && /#\d+/.test(d.name)) {
+						d.name = d.name.replace(/#\d+[a-z]?/i, '#' + d.num);
+					} else if (d.ai && d.name && !/#/.test(d.name)) {
+						d.name = d.name.split('·')[0].trim() + ' #' + d.num;
+					}
+				}
+			}
+
 			function spawnMeshes(list) {
+				resolveFieldNumbers(list);
 				list.forEach(c => {
 					if (c.mesh) scene.remove(c.mesh.g);
-					const col = c.i === 0 ? PLAYER_SETUP.color : COLORS[c.i][0];
-					const num = c.i === 0 ? PLAYER_SETUP.num : COLORS[c.i][1];
+					const col = c.i === 0 ? PLAYER_SETUP.color : (COLORS[c.i] && COLORS[c.i][0]) || 0xffffff;
+					const num = String(c.num || (c.i === 0 ? PLAYER_SETUP.num : (COLORS[c.i] && COLORS[c.i][1]) || c.i));
+					c.num = num;
 					c.mesh = cls === 'truck' ? makeTruck(col, num) : makeCar(col, num, c.i === 0 ? (PLAYER_SETUP.livery || 0) : 0)
 				})
 			}
@@ -2336,6 +2375,7 @@ const truckBody = (() => {
 				clearCars();
 				allDrivers = [];
 				COLORS.forEach(([col, n], i) => allDrivers.push(makeCarData(i, col, n)));
+				resolveFieldNumbers(allDrivers);
 				assignRacingLines();
 				if (raceMode === 'quick') {
 					raceLaps = 10;
