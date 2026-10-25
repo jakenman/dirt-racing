@@ -1996,22 +1996,25 @@ const truckBody = (() => {
 							hg.add(w);
 						}
 					}
-					hg.position.set(q.x, 0, q.z);
+					const py = typeof hAt === 'function' ? hAt(R + (lat || 0)) : 0;
+					hg.position.set(q.x, py, q.z);
 					hg.rotation.y = a;
+					hg.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
 					trackG.add(hg);
 				}
-				// Infield: push trucks + ATVs (stationary). Ambulance sits OUTSIDE near turn 4.
+				// Infield: lat must be < -W/2 so props sit on clay, not through the racing surface
 				const mid = PER * 0.5;
-				addParked('push', mid - 25, -W * 0.22, 0.4);
-				addParked('push', mid - 8, -W * 0.28, -0.3);
-				addParked('push', mid + 12, -W * 0.25, 0.6);
-				addParked('push', mid + 30, -W * 0.2, -0.15);
-				addParked('atv', mid - 15, -W * 0.35, 1.2);
-				addParked('atv', mid + 5, -W * 0.38, -0.9);
-				addParked('atv', mid + 20, -W * 0.32, 0.2);
-				// Outside fence off turn 4 (just before start/finish)
-				const t4 = ((getStartS() - PER * 0.06) % PER + PER) % PER;
-				addParked('ambulance', t4, W / 2 + 16, 0.15);
+				const inLat = -W / 2 - 10; // clear of racing groove
+				addParked('push', mid - 28, inLat, 0.5);
+				addParked('push', mid - 10, inLat - 3, -0.4);
+				addParked('push', mid + 10, inLat - 1, 0.7);
+				addParked('push', mid + 32, inLat - 2, -0.2);
+				addParked('atv', mid - 18, inLat - 6, 1.1);
+				addParked('atv', mid + 4, inLat - 7, -0.8);
+				addParked('atv', mid + 22, inLat - 5, 0.3);
+				// Ambulance OUTSIDE fence near turn 4 (approach to start)
+				const t4 = ((getStartS() - PER * 0.07) % PER + PER) % PER;
+				addParked('ambulance', t4, W / 2 + 14, 0.2);
 			}
 
 			// cars
@@ -2021,11 +2024,11 @@ const truckBody = (() => {
 				sprint: {
 					maxv: 38, // ~85 mph
 					pow: 13.5, // ~3.2s to 60
-					grip: 3.2,
-					thrLoss: 1.6,
-					yaw: 4,
-					yawGain: 1.35,
-					thrSteer: 0.9,
+					grip: 3.55,
+					thrLoss: 0.85, // was 1.6 — was killing corner speed vs AI
+					yaw: 4.4,
+					yawGain: 1.5,
+					thrSteer: 1.05,
 					front: 1.0,
 					roll: 0.02,
 					mass: 1,
@@ -2034,9 +2037,9 @@ const truckBody = (() => {
 				truck: {
 					maxv: 30, // ~67 mph — clearly slower than sprint
 					pow: 8.2, // ~5s to 60
-					grip: 4.2,
-					thrLoss: 0.8,
-					yaw: 2.4,
+					grip: 4.5,
+					thrLoss: 0.45,
+					yaw: 2.7,
 					yawGain: 1.15,
 					thrSteer: 0.45,
 					front: 1.6,
@@ -3758,11 +3761,16 @@ const truckBody = (() => {
 					vf * 0.25);
 				vf += a * dt;
 				if (brk && vf < 0) vf = Math.max(vf, -8);
-				// lateral grip: weight bias shifts grip left/right slightly
-				const grip = (S.grip - thr * S.thrLoss * Math.min(1, sp / 15) + brk * 0.5) * tg * (1 + Math.abs(bias) *
-					0.04);
-				c.tire = Math.max(0, c.tire - dt * sp * (1 + Math.abs(c.slip || 0) * 6) * 0.00004);
+				// lateral grip: throttle-through corners (less speed bleed than pure lift)
+				const steerAmt = Math.abs(c.steer || st || 0);
+				const thrLossMul = thr ? (1 - Math.min(0.55, steerAmt * 0.45)) : 1; // turning + gas = less penalty
+				const grip = (S.grip - thr * S.thrLoss * thrLossMul * Math.min(1, sp / 15) + brk * 0.5) * tg * (1 + Math.abs(bias) * 0.04);
+				c.tire = Math.max(0, c.tire - dt * sp * (1 + Math.abs(c.slip || 0) * 5) * 0.000035);
 				vl *= Math.exp(-grip * dt);
+				// Mild forward help while committed mid-corner on gas
+				if (thr && steerAmt > 0.35 && vf > 8) {
+					vf += S.pow * 0.12 * steerAmt * dt;
+				}
 				// yaw — bias adds a constant yaw preference (left weight = easier left rotation)
 				const turn = c.steer * Math.min(1, sp / 8) * (S.yawGain - 0.4 * Math.min(1, sp / MAXV)) * (0.8 + 0.2 *
 				tg);
@@ -3975,7 +3983,7 @@ const truckBody = (() => {
 				if (c.tire != null && c.tire < 0.75) targetMph *= 0.92 + c.tire * 0.08;
 				if (c.dmg > 0.2) targetMph *= 1 - c.dmg * 0.12;
 				let tgt = targetMph / 2.237;
-				if (inTurn) tgt *= cls === 'truck' ? 0.92 : 0.955;
+				if (inTurn) tgt *= cls === 'truck' ? 0.88 : 0.93;
 				let brake = 0;
 				let laneNudge = c.aiLineBias * 0.35;
 				let blocked = false;
@@ -4075,7 +4083,12 @@ const truckBody = (() => {
 				c.prevS = p.s;
 				c.s = p.s
 			}
-			const score = c => c.done ? 1e9 - finishOrder.indexOf(c) * 1e6 : c.lap * PER + c.s;
+			const score = c => {
+				if (c.done) return 1e9 - finishOrder.indexOf(c) * 1e6;
+				const startS = getStartS();
+				const rel = ((((c.s != null ? c.s : 0) - startS) % PER) + PER) % PER;
+				return (c.lap || 0) * PER + rel;
+			};
 			const fmt = t => isFinite(t) && t > 0 ? (Math.floor(t / 60) + ':' + (t % 60).toFixed(2).padStart(5, '0')) :
 				'--';
 			const tw = document.getElementById('tw'),
