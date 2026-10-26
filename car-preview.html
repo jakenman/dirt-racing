@@ -6,8 +6,10 @@
 <title>Sprint Car Preview</title>
 <style>
 html,body{margin:0;height:100%;background:#0a0c14;color:#eee;font-family:system-ui,sans-serif;overflow:hidden}
-#info{position:fixed;left:12px;top:12px;z-index:2;background:rgba(0,0,0,.55);padding:10px 14px;border-radius:10px;font-size:13px;max-width:90%}
+#info{position:fixed;left:12px;top:12px;z-index:2;background:rgba(0,0,0,.6);padding:10px 14px;border-radius:10px;font-size:13px;max-width:92%;line-height:1.4}
 a{color:#ffd080}
+.err{color:#ff8a8a}
+.ok{color:#8f8}
 </style>
 </head>
 <body>
@@ -15,63 +17,87 @@ a{color:#ffd080}
   <b>Sprint car .glb preview</b><br/>
   Drag to orbit · Pinch zoom<br/>
   <a href="index.html">← Back to game</a>
+  <div id="status">Loading…</div>
 </div>
 <script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js"}}
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
 </script>
 <script type="module">
-import * as T from 'three';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/loaders/GLTFLoader.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/controls/OrbitControls.js';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const scene = new T.Scene();
-scene.background = new T.Color(0x0a0c14);
-const camera = new T.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 100);
+const status = document.getElementById('status');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0c14);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 100);
 camera.position.set(3.2, 1.8, 3.5);
-const renderer = new T.WebGLRenderer({antialias:true});
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-if (T.sRGBEncoding != null) renderer.outputEncoding = T.sRGBEncoding;
-else if (T.SRGBColorSpace != null) renderer.outputColorSpace = T.SRGBColorSpace;
+if ('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
-scene.add(new T.HemisphereLight(0x6a7a9a, 0x2a1810, 0.55));
-const key = new T.DirectionalLight(0xffd0a0, 1.2);
+scene.add(new THREE.HemisphereLight(0x6a7a9a, 0x2a1810, 0.6));
+const key = new THREE.DirectionalLight(0xffd0a0, 1.25);
 key.position.set(4, 8, 3);
 scene.add(key);
-const fill = new T.PointLight(0xffc888, 1.4, 20);
+const fill = new THREE.PointLight(0xffc888, 1.5, 24);
 fill.position.set(0, 3, 0);
 scene.add(fill);
-
-const grid = new T.GridHelper(12, 12, 0x333344, 0x222230);
-scene.add(grid);
+scene.add(new THREE.GridHelper(12, 12, 0x333344, 0x222230));
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0.6, 0);
+controls.enableDamping = true;
 controls.update();
 
+// Pre-check the file so we know if it's HTML-404 vs real GLB
+try {
+  const head = await fetch('sprint_car.glb', { method: 'GET' });
+  const buf = await head.arrayBuffer();
+  const u8 = new Uint8Array(buf);
+  const magic = String.fromCharCode(u8[0], u8[1], u8[2], u8[3]);
+  status.innerHTML = `Fetched ${buf.byteLength} bytes · magic=${magic}`;
+  if (magic !== 'glTF') {
+    status.innerHTML += `<div class="err">Not a GLB (got ${magic}). First bytes may be HTML.</div>`;
+  }
+} catch (e) {
+  status.innerHTML = `<span class="err">Fetch failed: ${e}</span>`;
+}
+
 const loader = new GLTFLoader();
-loader.load('sprint_car.glb', (gltf) => {
-  const car = gltf.scene;
-  car.traverse(o => {
-    if (o.isMesh) {
-      o.castShadow = true;
-      o.receiveShadow = true;
-    }
-  });
-  scene.add(car);
-  document.getElementById('info').innerHTML += '<br/><span style="color:#8f8">Loaded sprint_car.glb</span>';
-}, undefined, (err) => {
-  document.getElementById('info').innerHTML += '<br/><span style="color:#f88">Load error: '+err+'</span>';
-  console.error(err);
-});
+loader.load(
+  'sprint_car.glb?v=2',
+  (gltf) => {
+    const car = gltf.scene;
+    car.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+    });
+    scene.add(car);
+    status.innerHTML += `<div class="ok">Loaded OK</div>`;
+  },
+  undefined,
+  (err) => {
+    console.error(err);
+    status.innerHTML += `<div class="err">GLTF error: ${err && err.message ? err.message : err}</div>`;
+  }
+);
 
 addEventListener('resize', () => {
-  camera.aspect = innerWidth/innerHeight;
+  camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
-(function loop(){
+(function loop() {
   requestAnimationFrame(loop);
   controls.update();
   renderer.render(scene, camera);
