@@ -6,101 +6,155 @@
 <title>Sprint Car Preview</title>
 <style>
 html,body{margin:0;height:100%;background:#0a0c14;color:#eee;font-family:system-ui,sans-serif;overflow:hidden}
-#info{position:fixed;left:12px;top:12px;z-index:2;background:rgba(0,0,0,.6);padding:10px 14px;border-radius:10px;font-size:13px;max-width:92%;line-height:1.4}
-a{color:#ffd080}
-.err{color:#ff8a8a}
-.ok{color:#8f8}
+#info{position:fixed;left:12px;top:12px;z-index:2;background:rgba(0,0,0,.65);padding:10px 14px;border-radius:10px;font-size:13px;max-width:92%;line-height:1.4}
+a{color:#ffd080}.err{color:#ff8a8a}.ok{color:#8f8}
 </style>
 </head>
 <body>
 <div id="info">
-  <b>Sprint car .glb preview</b><br/>
+  <b>Sprint car preview</b> (manual GLB decode)<br/>
   Drag to orbit · Pinch zoom<br/>
   <a href="index.html">← Back to game</a>
   <div id="status">Loading…</div>
 </div>
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-  }
-}
-</script>
-<script type="module">
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
-const status = document.getElementById('status');
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0c14);
-const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 100);
-camera.position.set(3.2, 1.8, 3.5);
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-if ('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
-document.body.appendChild(renderer.domElement);
-
-scene.add(new THREE.HemisphereLight(0x6a7a9a, 0x2a1810, 0.6));
-const key = new THREE.DirectionalLight(0xffd0a0, 1.25);
-key.position.set(4, 8, 3);
-scene.add(key);
-const fill = new THREE.PointLight(0xffc888, 1.5, 24);
-fill.position.set(0, 3, 0);
-scene.add(fill);
-scene.add(new THREE.GridHelper(12, 12, 0x333344, 0x222230));
-
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0.6, 0);
-controls.enableDamping = true;
-controls.update();
-
-// Pre-check the file so we know if it's HTML-404 vs real GLB
-try {
-  const head = await fetch('sprint_car.glb', { method: 'GET' });
-  const buf = await head.arrayBuffer();
-  const u8 = new Uint8Array(buf);
-  const magic = String.fromCharCode(u8[0], u8[1], u8[2], u8[3]);
-  status.innerHTML = `Fetched ${buf.byteLength} bytes · magic=${magic}`;
-  if (magic !== 'glTF') {
-    status.innerHTML += `<div class="err">Not a GLB (got ${magic}). First bytes may be HTML.</div>`;
-  }
-} catch (e) {
-  status.innerHTML = `<span class="err">Fetch failed: ${e}</span>`;
-}
-
-const loader = new GLTFLoader();
-loader.load(
-  'sprint_car.glb?v=2',
-  (gltf) => {
-    const car = gltf.scene;
-    car.traverse((o) => {
-      if (o.isMesh) {
-        o.castShadow = true;
-        o.receiveShadow = true;
-      }
-    });
-    scene.add(car);
-    status.innerHTML += `<div class="ok">Loaded OK</div>`;
-  },
-  undefined,
-  (err) => {
-    console.error(err);
-    status.innerHTML += `<div class="err">GLTF error: ${err && err.message ? err.message : err}</div>`;
-  }
-);
-
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
+<script src="three.min.js"></script>
+<script>
+(function () {
+  const status = document.getElementById('status');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0c14);
+  const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 100);
+  camera.position.set(3.2, 1.8, 3.5);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(innerWidth, innerHeight);
-});
-(function loop() {
-  requestAnimationFrame(loop);
-  controls.update();
-  renderer.render(scene, camera);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  document.body.appendChild(renderer.domElement);
+
+  scene.add(new THREE.HemisphereLight(0x6a7a9a, 0x2a1810, 0.65));
+  const key = new THREE.DirectionalLight(0xffd0a0, 1.3);
+  key.position.set(4, 8, 3);
+  scene.add(key);
+  scene.add(new THREE.PointLight(0xffc888, 1.6, 24).translateY(3));
+  scene.add(new THREE.GridHelper(12, 12, 0x333344, 0x222230));
+
+  // Simple orbit
+  let theta = 0.9, phi = 0.5, radius = 5, dragging = false, lx = 0, ly = 0;
+  function placeCam() {
+    camera.position.set(
+      radius * Math.sin(phi) * Math.cos(theta),
+      radius * Math.cos(phi) + 0.4,
+      radius * Math.sin(phi) * Math.sin(theta)
+    );
+    camera.lookAt(0, 0.6, 0);
+  }
+  placeCam();
+  renderer.domElement.addEventListener('pointerdown', e => { dragging = true; lx = e.clientX; ly = e.clientY; });
+  addEventListener('pointerup', () => dragging = false);
+  addEventListener('pointermove', e => {
+    if (!dragging) return;
+    theta -= (e.clientX - lx) * 0.01;
+    phi = Math.max(0.1, Math.min(1.4, phi + (e.clientY - ly) * 0.01));
+    lx = e.clientX; ly = e.clientY;
+    placeCam();
+  });
+  renderer.domElement.addEventListener('wheel', e => {
+    radius = Math.max(2, Math.min(12, radius + e.deltaY * 0.01));
+    placeCam();
+  }, { passive: true });
+  let lastPinch = 0;
+  renderer.domElement.addEventListener('touchmove', e => {
+    if (e.touches.length === 2) {
+      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      if (lastPinch) {
+        radius = Math.max(2, Math.min(12, radius * (lastPinch / d)));
+        placeCam();
+      }
+      lastPinch = d;
+    }
+  }, { passive: true });
+  renderer.domElement.addEventListener('touchend', () => lastPinch = 0);
+
+  function readU32(v, o) { return v[o] | (v[o+1]<<8) | (v[o+2]<<16) | (v[o+3]<<24); }
+
+  fetch('sprint_car.glb?v=4')
+    .then(r => r.arrayBuffer())
+    .then(buf => {
+      const u8 = new Uint8Array(buf);
+      const magic = String.fromCharCode(u8[0], u8[1], u8[2], u8[3]);
+      if (magic !== 'glTF') throw new Error('bad magic ' + magic);
+      const jlen = readU32(u8, 12);
+      // Decode JSON — strip any trailing pad
+      let js = '';
+      for (let i = 20; i < 20 + jlen; i++) {
+        const c = u8[i];
+        if (c === 0) break;
+        js += String.fromCharCode(c);
+      }
+      js = js.trim();
+      const gltf = JSON.parse(js);
+      const binOffset = 20 + jlen + 8;
+      const bin = buf.slice(binOffset);
+
+      const root = new THREE.Group();
+      root.name = 'SprintCar';
+
+      for (let mi = 0; mi < gltf.meshes.length; mi++) {
+        const meshDef = gltf.meshes[mi];
+        const prim = meshDef.primitives[0];
+        const posAcc = gltf.accessors[prim.attributes.POSITION];
+        const nrmAcc = gltf.accessors[prim.attributes.NORMAL];
+        const idxAcc = gltf.accessors[prim.indices];
+        const matDef = gltf.materials[prim.material];
+
+        function accessorData(acc, components) {
+          const bv = gltf.bufferViews[acc.bufferView];
+          const start = (bv.byteOffset || 0) + (acc.byteOffset || 0);
+          const count = acc.count * components;
+          if (acc.componentType === 5126) {
+            return new Float32Array(bin, start, count);
+          }
+          if (acc.componentType === 5123) {
+            return new Uint16Array(bin, start, count);
+          }
+          throw new Error('ctype ' + acc.componentType);
+        }
+
+        const positions = accessorData(posAcc, 3);
+        const normals = accessorData(nrmAcc, 3);
+        const indices = accessorData(idxAcc, 1);
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+        geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normals), 3));
+        geo.setIndex(new THREE.BufferAttribute(new Uint16Array(indices), 1));
+
+        const col = matDef.pbrMetallicRoughness.baseColorFactor;
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(col[0], col[1], col[2]),
+          metalness: matDef.pbrMetallicRoughness.metallicFactor || 0,
+          roughness: matDef.pbrMetallicRoughness.roughnessFactor != null ? matDef.pbrMetallicRoughness.roughnessFactor : 0.5,
+          side: THREE.DoubleSide
+        });
+        root.add(new THREE.Mesh(geo, mat));
+      }
+
+      scene.add(root);
+      status.innerHTML = '<span class="ok">Loaded ' + gltf.meshes.length + ' meshes · ' + buf.byteLength + ' bytes</span>';
+    })
+    .catch(e => {
+      console.error(e);
+      status.innerHTML = '<span class="err">' + e.message + '</span>';
+    });
+
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+  (function loop() {
+    requestAnimationFrame(loop);
+    renderer.render(scene, camera);
+  })();
 })();
 </script>
 </body>
