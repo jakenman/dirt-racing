@@ -747,10 +747,12 @@
 				c.height = 256;
 				const x = c.getContext('2d'),
 					g = x.createLinearGradient(0, 0, 0, 256);
-				g.addColorStop(0, '#02040e');
-				g.addColorStop(0.4, '#0a1535');
-				g.addColorStop(0.65, '#c45a30');
-				g.addColorStop(0.82, '#ff7a28');
+				// Night race sky — dark zenith, faint blue, warm glow only at horizon under lights
+				g.addColorStop(0, '#010208');
+				g.addColorStop(0.35, '#050a18');
+				g.addColorStop(0.55, '#0a1028');
+				g.addColorStop(0.72, '#1a1528');
+				g.addColorStop(0.88, '#3a2018');
 				g.addColorStop(1, '#1a0c08');
 				x.fillStyle = g;
 				x.fillRect(0, 0, 4, 256);
@@ -758,13 +760,14 @@
 				t.colorSpace = THREE.SRGBColorSpace;
 				return t
 			})();
-			scene.fog = new THREE.FogExp2(0x18121c, isMobile ? 0.0028 : 0.0023);
+			scene.fog = new THREE.FogExp2(0x0a0c14, isMobile ? 0.0032 : 0.0026);
 			const cam = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 900);
 			// Stadium dusk: deep sky, warm clay, bright floods
 			// Stadium dusk: warm key, cool fill, sunset rim — sells metal/paint without extra point lights
-			scene.add(new THREE.HemisphereLight(0x8aa0c8, 0x4a2818, isMobile ? 0.5 : 0.42));
-			const sun = new THREE.DirectionalLight(0xffd0a0, isMobile ? 1.45 : 1.3);
-			sun.position.set(55, 90, 35);
+			// Night: cool ambient from sky, warm bounce from clay
+			scene.add(new THREE.HemisphereLight(0x3a4a6a, 0x2a1810, isMobile ? 0.28 : 0.22));
+			const sun = new THREE.DirectionalLight(0xffc090, isMobile ? 0.55 : 0.45);
+			sun.position.set(40, 70, 25);
 			sun.castShadow = !isMobile;
 			if (!isMobile) {
 				sun.shadow.mapSize.set(2048, 2048);
@@ -784,7 +787,7 @@
 			const rim = new THREE.DirectionalLight(0xff7733, isMobile ? 0.6 : 0.48);
 			rim.position.set(-25, 30, -70);
 			scene.add(rim);
-			const amb = new THREE.AmbientLight(0x2e3448, isMobile ? 0.32 : 0.22);
+			const amb = new THREE.AmbientLight(0x1a2030, isMobile ? 0.22 : 0.16);
 			scene.add(amb);
 			// Cheap mobile env map from sky gradient (cars pick up sunset reflections)
 			try {
@@ -1481,9 +1484,15 @@ const truckBody = (() => {
 			
 			// track mesh
 			const dirtTex = cvTex(isMobile ? 384 : 512, isMobile ? 768 : 1024, (x, w, h) => {
-				// Base clay
-				x.fillStyle = '#4a2e1a';
+				// Night red clay — warm under floodlights
+				x.fillStyle = '#5c2818';
 				x.fillRect(0, 0, w, h);
+				x.fillStyle = '#6a301c';
+				x.globalAlpha = 0.55;
+				for (let i = 0; i < 40; i++) {
+					x.fillRect(0, (i / 40) * h + (Math.random() - 0.5) * 8, w, h * 0.04);
+				}
+				x.globalAlpha = 1;
 				// Multi-scale clay grain
 				const grains = Math.floor((isMobile ? 9000 : 16000) * DET);
 				for (let i = 0; i < grains; i++) {
@@ -1545,10 +1554,11 @@ const truckBody = (() => {
 			dirtTex.anisotropy = isMobile ? 2 : 8;
 			const dirtMat = new THREE.MeshStandardMaterial({
 					map: dirtTex,
+					color: 0xffc8a0, // lift red clay under warm floods
 					side: THREE.DoubleSide,
-					roughness: isMobile ? 0.84 : 0.9,
-					metalness: 0.02,
-					envMapIntensity: 0.2
+					roughness: isMobile ? 0.88 : 0.92,
+					metalness: 0.0,
+					envMapIntensity: 0.15
 				}),
 				wm = new THREE.MeshStandardMaterial({
 					color: 0xd8d8dc,
@@ -1768,32 +1778,44 @@ const truckBody = (() => {
 				Q.scale.setScalar(1);
 				trackG.add(trunks, leaves);
 				// Infield kept open clay (no pit pad / tents clutter)
-				// Stadium flood towers — bright lamps + soft pools of light
-				for (let i = 0; i < 6; i++) {
-					const q = cl(i * PER / 6 + PER / 12, W / 2 + 24),
-						p = new THREE.Mesh(new THREE.CylinderGeometry(.35, .5, 32, 6), mat(0x444450));
-					p.position.set(q.x, 16, q.z);
+				// Stadium flood towers — night race package (warm pools on clay)
+				for (let i = 0; i < 8; i++) {
+					const q = cl(i * PER / 8 + PER / 16, W / 2 + 26),
+						p = new THREE.Mesh(new THREE.CylinderGeometry(.4, .55, 36, 6), mat(0x333340));
+					p.position.set(q.x, 18, q.z);
 					trackG.add(p);
-					const lampMat = new THREE.MeshBasicMaterial({ color: 0xfff5d0 });
-					const l = new THREE.Mesh(new THREE.BoxGeometry(7, 2.8, 1.2), lampMat);
-					l.position.set(q.x, 32, q.z);
-					l.lookAt(q.x - q.nx * 10, 0, q.z - q.nz * 10);
+					const lampMat = new THREE.MeshBasicMaterial({ color: 0xfff0c8 });
+					const l = new THREE.Mesh(new THREE.BoxGeometry(8, 3.2, 1.4), lampMat);
+					l.position.set(q.x, 36, q.z);
+					l.lookAt(q.x - q.nx * 12, 2, q.z - q.nz * 12);
 					trackG.add(l);
-					// Glow halo (sprite-like plane)
+					// Stronger glow halo
 					const glow = new THREE.Mesh(
-						new THREE.PlaneGeometry(14, 10),
-						new THREE.MeshBasicMaterial({ color: 0xffe8a0, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide })
+						new THREE.PlaneGeometry(18, 12),
+						new THREE.MeshBasicMaterial({ color: 0xffd080, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide })
 					);
-					glow.position.set(q.x, 32, q.z);
-					glow.lookAt(q.x - q.nx * 5, 20, q.z - q.nz * 5);
+					glow.position.set(q.x, 36, q.z);
+					glow.lookAt(q.x - q.nx * 6, 18, q.z - q.nz * 6);
 					trackG.add(glow);
-					// Real light pools (limit count on mobile)
+					// Ground wash disc (fake light pool on clay — cheap, big impact)
+					const wash = new THREE.Mesh(
+						new THREE.CircleGeometry(22, 16),
+						new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide })
+					);
+					wash.rotation.x = -Math.PI / 2;
+					wash.position.set(q.x - q.nx * 14, 0.12, q.z - q.nz * 14);
+					trackG.add(wash);
+					// Real lights — every tower on desktop, every other on mobile
 					if (!isMobile || i % 2 === 0) {
-						const pl = new THREE.PointLight(0xffe0b0, isMobile ? 1.8 : 2.4, 95, 1.6);
-						pl.position.set(q.x - q.nx * 8, 28, q.z - q.nz * 8);
+						const pl = new THREE.PointLight(0xffc888, isMobile ? 2.6 : 3.4, 110, 1.4);
+						pl.position.set(q.x - q.nx * 10, 30, q.z - q.nz * 10);
 						trackG.add(pl);
 					}
 				}
+				// Soft fill over the oval so pack stays readable at night
+				const fill = new THREE.PointLight(0xffd0a0, isMobile ? 1.2 : 1.6, 140, 1.8);
+				fill.position.set(0, 42, 0);
+				trackG.add(fill);
 				for (const f of [0.27, 0.77]) {
 					const q = cl(PER * f, W / 2 + 30);
 					if (!clear(q.x, q.z, 20)) continue;
@@ -2015,6 +2037,109 @@ const truckBody = (() => {
 				// Ambulance OUTSIDE fence near turn 4 (approach to start)
 				const t4 = ((getStartS() - PER * 0.07) % PER + PER) % PER;
 				addParked('ambulance', t4, W / 2 + 14, 0.2);
+
+
+				// === NIGHT FACILITY: campers, trailers, pit vehicles, banners ===
+				function addTrailer(s, lat, yawOff, bodyCol, accent) {
+					const q = cl(s, lat);
+					const a = Math.atan2(-q.tz, q.tx) + (yawOff || 0);
+					const g = new THREE.Group();
+					const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.2, 5.5), mat(bodyCol || 0xd8d0c0));
+					body.position.y = 1.5;
+					g.add(body);
+					// stripe
+					const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.35, 5.4), mat(accent || 0x335588));
+					stripe.position.y = 1.7;
+					g.add(stripe);
+					// wheels
+					for (const z of [-1.6, 1.6]) {
+						const w = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.25, 8), mat(0x111));
+						w.rotation.z = Math.PI / 2;
+						w.position.set(1.2, 0.38, z);
+						g.add(w);
+						const w2 = w.clone();
+						w2.position.x = -1.2;
+						g.add(w2);
+					}
+					const py = typeof hAt === 'function' ? Math.max(0, hAt(R + lat)) : 0;
+					g.position.set(q.x, py, q.z);
+					g.rotation.y = a;
+					trackG.add(g);
+				}
+				function addCamper(s, lat, yawOff) {
+					const q = cl(s, lat);
+					const a = Math.atan2(-q.tz, q.tx) + (yawOff || 0);
+					const g = new THREE.Group();
+					const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.0, 4.2), mat(0xe8e0d0));
+					body.position.y = 1.4;
+					g.add(body);
+					const roof = new THREE.Mesh(new THREE.BoxGeometry(2.35, 0.15, 4.3), mat(0x888890));
+					roof.position.y = 2.45;
+					g.add(roof);
+					// window glow
+					const win = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 1.2), new THREE.MeshBasicMaterial({ color: 0xffe8a0 }));
+					win.position.set(1.12, 1.6, 0);
+					g.add(win);
+					g.position.set(q.x, 0, q.z);
+					g.rotation.y = a;
+					trackG.add(g);
+				}
+				function addBanner(s, lat, text, col) {
+					const q = cl(s, lat);
+					const a = Math.atan2(-q.tz, q.tx);
+					const g = new THREE.Group();
+					// poles
+					for (const z of [-3.2, 3.2]) {
+						const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 5.5, 6), mat(0x333));
+						pole.position.set(0, 2.75, z);
+						g.add(pole);
+					}
+					const cv = document.createElement('canvas');
+					cv.width = 512; cv.height = 128;
+					const cx = cv.getContext('2d');
+					cx.fillStyle = col || '#1a1a2e';
+					cx.fillRect(0, 0, 512, 128);
+					cx.fillStyle = '#ffd23f';
+					cx.font = 'bold 42px Arial';
+					cx.textAlign = 'center';
+					cx.fillText(text, 256, 78);
+					const sp = new THREE.Mesh(
+						new THREE.PlaneGeometry(6.5, 1.6),
+						new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), side: THREE.DoubleSide })
+					);
+					sp.position.y = 4.2;
+					g.add(sp);
+					g.position.set(q.x, 0, q.z);
+					g.rotation.y = a + Math.PI / 2;
+					trackG.add(g);
+				}
+				// Trailer / camper ring outside the fence (night facility)
+				const trailCols = [0xd8d0c0, 0xc8b090, 0xe0e8f0, 0xb0a090, 0xd0c8b8];
+				const accents = [0x335588, 0x883333, 0x2a6644, 0x554488, 0x886622];
+				const nTrail = isMobile ? 14 : 22;
+				for (let i = 0; i < nTrail; i++) {
+					const s = (i + 0.15) * PER / nTrail;
+					const lat = W / 2 + 38 + (i % 3) * 9 + (i % 2) * 3;
+					addTrailer(s, lat, (i % 5) * 0.15 - 0.3, trailCols[i % trailCols.length], accents[i % accents.length]);
+				}
+				const nCamp = isMobile ? 8 : 12;
+				for (let i = 0; i < nCamp; i++) {
+					const s = (i + 0.55) * PER / nCamp;
+					const lat = W / 2 + 52 + (i % 2) * 8;
+					addCamper(s, lat, (i % 3) * 0.2);
+				}
+				// Extra pit trucks outside (dark shapes under lights)
+				for (let i = 0; i < (isMobile ? 4 : 7); i++) {
+					const s = (i + 0.3) * PER / 7;
+					addParked('push', s, W / 2 + 32 + (i % 2) * 5, (i % 3) * 0.3);
+				}
+				// Place identity banners
+				addBanner(PER * 0.05, W / 2 + 22, 'WELCOME RACE FANS', '#1a2030');
+				addBanner(PER * 0.28, W / 2 + 22, 'DIRT RACING', '#2a1510');
+				addBanner(PER * 0.52, W / 2 + 22, 'FEATURE NIGHT', '#1a2030');
+				addBanner(PER * 0.78, W / 2 + 22, 'THANK YOU FANS', '#2a1510');
+
+
 			}
 
 			// cars
